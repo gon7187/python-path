@@ -54,10 +54,12 @@ import json
 
 SAFE_BUILTINS = {
     '__build_class__': builtins.__build_class__, 'abs': abs, 'all': all, 'any': any,
-    'bool': bool, 'dict': dict, 'enumerate': enumerate, 'float': float, 'int': int,
-    'len': len, 'list': list, 'max': max, 'min': min, 'print': print, 'range': range,
-    'round': round, 'set': set, 'sorted': sorted, 'str': str, 'sum': sum, 'tuple': tuple,
-    'zip': zip,
+    'bool': bool, 'chr': chr, 'dict': dict, 'enumerate': enumerate, 'float': float,
+    'format': format, 'int': int, 'isinstance': isinstance, 'len': len, 'list': list,
+    'map': map, 'max': max, 'min': min, 'ord': ord, 'pow': pow, 'print': print,
+    'range': range, 'repr': repr, 'reversed': reversed, 'round': round, 'set': set,
+    'slice': slice, 'sorted': sorted, 'str': str, 'sum': sum, 'tuple': tuple,
+    'type': type, 'zip': zip,
 }
 source = base64.b64decode(CODE).decode('utf-8')
 tests = json.loads(base64.b64decode(TESTS).decode('utf-8'))

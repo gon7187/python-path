@@ -80,6 +80,21 @@ def test_editor_runs_code_with_simulated_input() -> None:
         assert result["output"] == "Имя: Мира\nПривет, Мира!\n"
 
 
+def test_free_sandbox_runs_code_without_a_lesson_question() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/sandbox/run",
+            json={
+                "answer": "name = input('Имя: ')\nprint(name.upper())\n",
+                "inputs": ["мира"],
+            },
+        )
+        result = response.json()
+        assert response.status_code == 200
+        assert result["correct"] is True
+        assert result["output"] == "Имя: мира\nМИРА\n"
+
+
 def test_projects_are_progressive_and_run_in_the_sandbox() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")

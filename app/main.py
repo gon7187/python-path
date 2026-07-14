@@ -76,6 +76,10 @@ class ProjectRun(ProjectSubmission):
     inputs: list[str] = []
 
 
+class SandboxRun(ProjectRun):
+    """Свободный запуск в той же безопасной среде, что задания и проекты."""
+
+
 def status_for(lesson: dict, saved: dict) -> dict:
     index = next(index for index, item in enumerate(LESSONS) if item["id"] == lesson["id"])
     completed = lesson["id"] in saved
@@ -473,6 +477,11 @@ def run_editor_code(payload: CodeRun) -> dict:
     question = QUESTION_BY_ID.get(payload.question_id)
     if not question or question["kind"] != "code":
         raise HTTPException(status_code=404, detail="Кодовое задание не найдено")
+    return run_code(payload.answer, [], payload.inputs)
+
+
+@app.post("/api/sandbox/run")
+def run_sandbox(payload: SandboxRun) -> dict:
     return run_code(payload.answer, [], payload.inputs)
 
 

@@ -33,6 +33,14 @@ def test_code_runner_explains_when_input_value_is_missing() -> None:
     assert "не хватает строки" in result["message"]
 
 
+def test_code_runner_supports_core_learning_builtins() -> None:
+    result = run_code(
+        "print(isinstance(3, int))\nprint(type('текст'))\n",
+        [{"kind": "stdout", "expected": "True\n<class 'str'>"}],
+    )
+    assert result["correct"] is True
+
+
 def test_code_runner_blocks_imports() -> None:
     result = run_code("import os\n", [])
     assert result["correct"] is False

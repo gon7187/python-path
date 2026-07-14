@@ -1,5 +1,11 @@
 const view = document.querySelector('#view');
 let dashboard = null;
+const sandboxHistory = [];
+const sandboxSamples = [
+  { label: 'Вывод текста', code: "print('Привет, Python!')\n", inputs: [] },
+  { label: 'Небольшой расчёт', code: 'price = 120\ncount = 3\nprint(price * count)\n', inputs: [] },
+  { label: 'Ввод имени', code: "name = input('Имя: ')\nprint(f'Привет, {name}!')\n", inputs: ['Аня'] },
+];
 
 const esc = (value = '') => String(value)
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
@@ -36,7 +42,7 @@ function route() {
 }
 
 function setActiveNavigation(current) {
-  const active = current.startsWith('/projects') ? '/projects' : current.startsWith('/practice') ? '/practice' : '/';
+  const active = current.startsWith('/sandbox') ? '/sandbox' : current.startsWith('/projects') ? '/projects' : current.startsWith('/practice') ? '/practice' : '/';
   document.querySelectorAll('[data-nav]').forEach((node) => node.classList.toggle('active', node.dataset.nav === active));
 }
 
@@ -110,7 +116,7 @@ function questionTemplate(question, number, stageLabel = '') {
     const exampleInputs = (question.input_example || []).join('\n');
     field = `<textarea class="code-editor" data-answer-q="${question.id}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(question.starter)}</textarea>
       <details class="code-input-panel" ${exampleInputs ? 'open' : ''}><summary>⌨️ Данные для input() <small>необязательно</small></summary><p>Одна строка — один ответ. Они подставятся по порядку при запуске.</p><textarea class="code-stdin" data-input-q="${question.id}" placeholder="Например: Аня" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(exampleInputs)}</textarea></details>
-      <div class="code-actions"><button class="button ghost" type="button" data-run-code="${question.id}">▷ Запустить</button><button class="button blue" type="button" data-check-code="${question.id}">✓ Проверить по заданию</button></div>
+      <div class="code-actions"><button class="button ghost" type="button" data-run-code="${question.id}">▷ Запустить</button><button class="button blue" type="button" data-check-code="${question.id}">✓ Проверить по заданию</button><a class="button ghost sandbox-link" href="#/sandbox">⌨️ Песочница</a></div>
       <details class="hint"><summary>Нужна подсказка?</summary><p>${esc(question.hint)}</p></details>`;
   }
   return `<article class="question-card card" data-question="${question.id}">${head}${guide}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
@@ -302,6 +308,54 @@ async function renderPractice(mode = 'guided', moduleId = '') {
   renderStep();
 }
 
+function renderSandboxHistory() {
+  const node = document.querySelector('#sandbox-history');
+  if (!node) return;
+  if (!sandboxHistory.length) {
+    node.innerHTML = '<p class="sandbox-empty">Запуски появятся здесь. Не бойся менять код и запускать снова.</p>';
+    return;
+  }
+  node.innerHTML = sandboxHistory.map((item, index) => `<article class="sandbox-run ${item.correct ? '' : 'failed'}"><div><strong>Запуск ${sandboxHistory.length - index}</strong><span>${item.correct ? 'Код выполнился' : esc(item.message)}</span></div><pre class="execution-source">${esc(item.source)}</pre><span>Консоль</span><pre class="code-output">${esc(item.output || '— программа ничего не вывела —')}</pre></article>`).join('');
+}
+
+function renderSandbox() {
+  const sample = sandboxSamples[2];
+  view.innerHTML = `<section class="sandbox-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="sandbox-hero card"><p class="eyebrow">Свободная практика</p><h1>Песочница Python</h1><p class="lead">Пиши обычный код, меняй его и запускай сколько угодно раз. Здесь нет оценки и нет единственного правильного ответа — есть код, консоль и эксперимент.</p></article><aside class="learning-roadmap"><strong>Рабочий цикл</strong><span>1. Напиши идею</span><span>2. Запусти код</span><span>3. Прочитай вывод</span><p>Можно использовать базовые функции Python, условия, циклы, функции и input(). Импорты, файлы и системные команды остаются закрыты для безопасности.</p></aside><section class="sandbox-card card"><div class="sandbox-toolbar"><strong>Быстрый старт</strong><div>${sandboxSamples.map((item, index) => `<button class="sandbox-sample" type="button" data-sandbox-sample="${index}">${esc(item.label)}</button>`).join('')}</div></div><textarea id="sandbox-code" class="code-editor sandbox-editor" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(sample.code)}</textarea><details class="code-input-panel" open><summary>⌨️ Данные для input() <small>необязательно</small></summary><p>Одна строка — один ответ. Если код вызывает input() дважды, напиши два ответа в разных строках.</p><textarea id="sandbox-input" class="code-stdin" placeholder="Например: Аня" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(sample.inputs.join('\n'))}</textarea></details><div class="code-actions"><button class="button blue" type="button" id="sandbox-run">▷ Запустить код</button><button class="button ghost" type="button" id="sandbox-reset">↺ Очистить</button></div></section><section class="sandbox-console card"><div class="sandbox-console-head"><div><p class="eyebrow">История</p><h2>Консоль запусков</h2></div><span>Каждый запуск сохраняется, пока открыта страница</span></div><div id="sandbox-history"></div></section></section>`;
+  const code = document.querySelector('#sandbox-code');
+  const input = document.querySelector('#sandbox-input');
+  const runButton = document.querySelector('#sandbox-run');
+  document.querySelectorAll('[data-sandbox-sample]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const selected = sandboxSamples[Number(button.dataset.sandboxSample)];
+      code.value = selected.code;
+      input.value = selected.inputs.join('\n');
+      code.focus();
+    });
+  });
+  document.querySelector('#sandbox-reset').addEventListener('click', () => {
+    code.value = '# Здесь можно писать и запускать любой учебный код\n';
+    input.value = '';
+    sandboxHistory.length = 0;
+    renderSandboxHistory();
+    code.focus();
+  });
+  runButton.addEventListener('click', async () => {
+    runButton.disabled = true;
+    runButton.textContent = 'Запускаем…';
+    try {
+      const result = await api('/api/sandbox/run', { method: 'POST', body: JSON.stringify({ answer: code.value, inputs: input.value ? input.value.replaceAll('\r\n', '\n').split('\n') : [] }) });
+      sandboxHistory.unshift({ source: code.value, output: result.output, correct: result.correct, message: result.message });
+      renderSandboxHistory();
+    } catch (error) {
+      sandboxHistory.unshift({ source: code.value, output: '', correct: false, message: error.message });
+      renderSandboxHistory();
+    }
+    runButton.disabled = false;
+    runButton.textContent = '▷ Запустить код';
+  });
+  renderSandboxHistory();
+}
+
 async function renderProjects() {
   loading();
   const data = await api('/api/projects');
@@ -380,6 +434,7 @@ async function render() {
   try {
     if (current === '/') { loading(); renderDashboard(await refreshDashboard()); }
     else if (current === '/practice') await renderPractice();
+    else if (current === '/sandbox') renderSandbox();
     else if (current === '/projects') await renderProjects();
     else if (current.startsWith('/projects/')) await renderProject(current.split('/')[2]);
     else if (current.startsWith('/lesson/')) await renderLesson(current.split('/')[2]);
