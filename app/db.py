@@ -44,6 +44,10 @@ def init_db() -> None:
                 total_count INTEGER NOT NULL,
                 passed_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS project_progress (
+                project_id TEXT PRIMARY KEY,
+                completed_at TEXT NOT NULL
+            );
             INSERT OR IGNORE INTO profile (id, xp, streak, last_activity) VALUES (1, 0, 0, NULL);
             """
         )
@@ -120,6 +124,23 @@ def save_exam(module_id: str, score: int, total_count: int) -> int:
     return gained
 
 
+def save_project(project_id: str, xp: int) -> tuple[int, bool]:
+    """Отмечает проект завершённым и начисляет награду только за первый проход."""
+    with connection() as conn:
+        _touch_activity(conn)
+        previous = conn.execute(
+            "SELECT project_id FROM project_progress WHERE project_id = ?", (project_id,)
+        ).fetchone()
+        was_new = previous is None
+        conn.execute(
+            "INSERT OR IGNORE INTO project_progress (project_id, completed_at) VALUES (?, ?)",
+            (project_id, datetime.now(UTC).isoformat()),
+        )
+        if was_new:
+            conn.execute("UPDATE profile SET xp = xp + ? WHERE id = 1", (xp,))
+    return (xp if was_new else 0), was_new
+
+
 def state() -> dict:
     with connection() as conn:
         profile = dict(
@@ -137,6 +158,10 @@ def state() -> dict:
                 "SELECT module_id, score, total_count, passed_at FROM exam_progress"
             )
         }
+        projects = {
+            row["project_id"]: dict(row)
+            for row in conn.execute("SELECT project_id, completed_at FROM project_progress")
+        }
         weak = [
             row["question_id"]
             for row in conn.execute(
@@ -146,4 +171,10 @@ def state() -> dict:
                 """
             )
         ]
-    return {"profile": profile, "lessons": lessons, "exams": exams, "weak_question_ids": weak}
+    return {
+        "profile": profile,
+        "lessons": lessons,
+        "exams": exams,
+        "projects": projects,
+        "weak_question_ids": weak,
+    }

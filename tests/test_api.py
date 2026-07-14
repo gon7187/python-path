@@ -80,6 +80,34 @@ def test_editor_runs_code_with_simulated_input() -> None:
         assert result["output"] == "Имя: Мира\nПривет, Мира!\n"
 
 
+def test_projects_are_progressive_and_run_in_the_sandbox() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        projects = client.get("/api/projects").json()["projects"]
+        assert len(projects) == 6
+        assert projects[0]["unlocked"] is True
+        assert projects[1]["unlocked"] is False
+
+        project = client.get("/api/projects/greeting-card").json()
+        assert project["starter"].startswith("name = input")
+        assert "tests" not in project
+
+        source = "name = input('Имя: ')\nprint(f'Привет, {name}!')\n"
+        run = client.post(
+            "/api/projects/greeting-card/run",
+            json={"answer": source, "inputs": ["Мира"]},
+        ).json()
+        assert run["correct"] is True
+        assert run["output"] == "Имя: Мира\nПривет, Мира!\n"
+
+        submission = client.post(
+            "/api/projects/greeting-card/submit", json={"answer": source}
+        ).json()
+        assert submission["correct"] is True
+        assert submission["xp_gained"] == 25
+        client.post("/api/reset")
+
+
 def test_practice_sessions_are_guided_and_repeat_errors() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")

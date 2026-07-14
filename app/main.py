@@ -21,8 +21,18 @@ from app.content import (
     public_lesson,
     public_question,
 )
-from app.db import DATABASE_PATH, connection, init_db, record_attempt, save_exam, save_lesson, state
+from app.db import (
+    DATABASE_PATH,
+    connection,
+    init_db,
+    record_attempt,
+    save_exam,
+    save_lesson,
+    save_project,
+    state,
+)
 from app.evaluator import evaluate, run_code
+from app.projects import PROJECT_BY_ID, PROJECTS, public_project
 
 APP_DIR = Path(__file__).parent
 STATIC_DIR = APP_DIR / "static"
@@ -55,6 +65,14 @@ class CodeCheck(BaseModel):
 
 
 class CodeRun(CodeCheck):
+    inputs: list[str] = []
+
+
+class ProjectSubmission(BaseModel):
+    answer: str
+
+
+class ProjectRun(ProjectSubmission):
     inputs: list[str] = []
 
 
@@ -382,6 +400,73 @@ def check_code(payload: CodeCheck) -> dict:
     return evaluate(question, payload.answer)
 
 
+def project_status(project: dict, index: int, snapshot: dict) -> dict:
+    completed = project["id"] in snapshot["projects"]
+    previous_complete = index == 0 or PROJECTS[index - 1]["id"] in snapshot["projects"]
+    ready_by_course = len(snapshot["lessons"]) >= project["min_lessons"]
+    return {
+        "completed": completed,
+        "unlocked": completed or (previous_complete and ready_by_course),
+    }
+
+
+def project_payload(include_editor_id: str | None = None) -> list[dict]:
+    snapshot = state()
+    payload = []
+    for index, project in enumerate(PROJECTS):
+        include_editor = project["id"] == include_editor_id
+        payload.append(
+            {
+                **public_project(project, include_editor=include_editor),
+                **project_status(project, index, snapshot),
+            }
+        )
+    return payload
+
+
+def require_project(project_id: str) -> dict:
+    project = PROJECT_BY_ID.get(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не найден")
+    index = PROJECTS.index(project)
+    if not project_status(project, index, state())["unlocked"]:
+        raise HTTPException(
+            status_code=403, detail="Сначала заверши предыдущий проект и нужные уроки"
+        )
+    return project
+
+
+@app.get("/api/projects")
+def get_projects() -> dict:
+    return {"projects": project_payload()}
+
+
+@app.get("/api/projects/{project_id}")
+def get_project(project_id: str) -> dict:
+    require_project(project_id)
+    return next(item for item in project_payload(project_id) if item["id"] == project_id)
+
+
+@app.post("/api/projects/{project_id}/run")
+def run_project(project_id: str, payload: ProjectRun) -> dict:
+    require_project(project_id)
+    return run_code(payload.answer, [], payload.inputs)
+
+
+@app.post("/api/projects/{project_id}/submit")
+def submit_project(project_id: str, payload: ProjectSubmission) -> dict:
+    project = require_project(project_id)
+    result = run_code(payload.answer, project["tests"], project["test_inputs"])
+    gained = 0
+    if result["correct"]:
+        gained, _ = save_project(project_id, project["xp"])
+    return {
+        **result,
+        "xp_gained": gained,
+        "message": project["success"] if result["correct"] else result["message"],
+    }
+
+
 @app.post("/api/code/run")
 def run_editor_code(payload: CodeRun) -> dict:
     """Запускает код с введёнными учеником строками без раскрытия тестов задания."""
@@ -435,6 +520,7 @@ def reset_progress() -> dict:
         conn.execute("DELETE FROM lesson_progress")
         conn.execute("DELETE FROM attempts")
         conn.execute("DELETE FROM exam_progress")
+        conn.execute("DELETE FROM project_progress")
         conn.execute("UPDATE profile SET xp = 0, streak = 0, last_activity = NULL WHERE id = 1")
     return {"ok": True}
 

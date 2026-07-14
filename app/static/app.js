@@ -36,7 +36,7 @@ function route() {
 }
 
 function setActiveNavigation(current) {
-  const active = current.startsWith('/practice') ? '/practice' : '/';
+  const active = current.startsWith('/projects') ? '/projects' : current.startsWith('/practice') ? '/practice' : '/';
   document.querySelectorAll('[data-nav]').forEach((node) => node.classList.toggle('active', node.dataset.nav === active));
 }
 
@@ -172,12 +172,20 @@ function showInline(questionId, correct, message, checks = [], output = null) {
   node.innerHTML = `${correct ? '✓' : '↺'} ${esc(message)}${details}${consoleOutput}`;
 }
 
-function submissionResult(result, retryText = 'Попробовать ещё раз') {
+function executionPanel(executions, title = 'Код в действии') {
+  if (!executions.length) return '';
+  const cards = executions.map((item) => `<article class="execution-card"><strong>${item.correct ? '✓ Результат прошёл проверку' : '🖥️ Результат этого запуска'}</strong>${item.source ? `<pre class="execution-source">${esc(item.source)}</pre>` : ''}<span>Вывод в консоли</span><pre class="code-output">${esc(item.output || '— программа ничего не вывела —')}</pre></article>`).join('');
+  return `<section class="execution-panel card"><h2>🖥️ ${title}</h2><p>Смотри на вывод: так Python прошёл код строка за строкой.</p>${cards}</section>`;
+}
+
+function submissionResult(result, retryText = 'Попробовать ещё раз', answers = []) {
   const items = result.results.map((item) => `<div class="result-item ${item.correct ? 'ok' : 'no'}"><b>${item.correct ? '✓ Верно' : '↺ Повтори'}</b> ${esc(item.explanation || item.message || '')}</div>`).join('');
+  const answerById = Object.fromEntries(answers.map((item) => [item.question_id, item.answer]));
+  const executions = result.results.filter((item) => Object.prototype.hasOwnProperty.call(item, 'output')).map((item) => ({ correct: item.correct, output: item.output, source: answerById[item.question_id] || '' }));
   const action = result.passed
     ? '<a class="button blue" href="#/">К маршруту</a>'
     : `<button class="button" type="button" onclick="location.reload()">${retryText}</button>`;
-  return `<section class="result-panel ${result.passed ? '' : 'fail'}" id="submission-result"><h2>${result.passed ? 'Отличная работа! 🎉' : 'Ещё один подход — и получится'}</h2><p>${esc(result.message)}${result.xp_gained ? ` +${result.xp_gained} XP.` : ''}</p><div class="result-list">${items}</div><div class="code-actions">${action}</div></section>`;
+  return `<section class="result-panel ${result.passed ? '' : 'fail'}" id="submission-result"><h2>${result.passed ? 'Отличная работа! 🎉' : 'Ещё один подход — и получится'}</h2><p>${esc(result.message)}${result.xp_gained ? ` +${result.xp_gained} XP.` : ''}</p><div class="result-list">${items}</div><div class="code-actions">${action}</div></section>${executionPanel(executions)}`;
 }
 
 async function renderLesson(id) {
@@ -202,9 +210,11 @@ async function renderLesson(id) {
     const button = form.querySelector('[type="submit"]');
     button.disabled = true; button.textContent = 'Проверяем…';
     try {
-      const result = await api(`/api/lessons/${id}/submit`, { method: 'POST', body: JSON.stringify({ answers: getAnswers(form, lesson.questions) }) });
+      const answers = getAnswers(form, lesson.questions);
+      const result = await api(`/api/lessons/${id}/submit`, { method: 'POST', body: JSON.stringify({ answers }) });
       document.querySelector('#submission-result')?.remove();
-      form.insertAdjacentHTML('afterend', submissionResult(result));
+      form.nextElementSibling?.classList?.contains('execution-panel') && form.nextElementSibling.remove();
+      form.insertAdjacentHTML('afterend', submissionResult(result, 'Попробовать ещё раз', answers));
       result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks, item.output));
       await refreshDashboard();
       if (result.passed) toast(`+${result.xp_gained} XP — урок пройден!`);
@@ -220,6 +230,7 @@ async function renderPractice(mode = 'guided', moduleId = '') {
   const session = await api(`/api/practice/session?${params}`);
   let index = 0;
   let correctCount = 0;
+  const executions = [];
 
   const modeButton = (id, label, caption) => `<button class="practice-mode ${session.mode === id ? 'active' : ''}" type="button" data-practice-mode="${id}"><strong>${label}</strong><small>${caption}</small></button>`;
   const moduleOptions = session.available_modules.map((module) => `<option value="${esc(module.id)}" ${moduleId === module.id ? 'selected' : ''}>${esc(module.icon)} ${esc(module.title)}</option>`).join('');
@@ -250,7 +261,7 @@ async function renderPractice(mode = 'guided', moduleId = '') {
     const message = correctCount === total
       ? 'Отличная серия: все задания решены. Можно переходить к следующему шагу.'
       : `Верно ${correctCount} из ${total}. Ошибки уже добавлены в режим «Ошибки» — вернись к ним после небольшой паузы.`;
-    sessionNode.innerHTML = `<section class="practice-summary card"><span class="practice-summary-icon">${correctCount === total ? '🏆' : '🔁'}</span><h2>Серия завершена</h2><p>${esc(message)}</p><div class="code-actions"><button class="button" type="button" data-practice-again>Ещё серия <span>→</span></button><a class="button ghost" href="#/">К маршруту</a></div></section>`;
+    sessionNode.innerHTML = `<section class="practice-summary card"><span class="practice-summary-icon">${correctCount === total ? '🏆' : '🔁'}</span><h2>Серия завершена</h2><p>${esc(message)}</p><div class="code-actions"><button class="button" type="button" data-practice-again>Ещё серия <span>→</span></button><a class="button ghost" href="#/">К маршруту</a></div></section>${executionPanel(executions, 'Код в действии: практика')}`;
     sessionNode.querySelector('[data-practice-again]').addEventListener('click', () => renderPractice(mode, moduleId));
   };
 
@@ -269,6 +280,7 @@ async function renderPractice(mode = 'guided', moduleId = '') {
       try {
         const answer = getAnswers(form, [question])[0];
         const result = await api('/api/practice/submit', { method: 'POST', body: JSON.stringify(answer) });
+        if (question.kind === 'code') executions.push({ correct: result.correct, output: result.output, source: answer.answer });
         if (result.correct) correctCount += 1;
         showInline(question.id, result.correct, result.message, result.checks, result.output);
         await refreshDashboard();
@@ -290,6 +302,50 @@ async function renderPractice(mode = 'guided', moduleId = '') {
   renderStep();
 }
 
+async function renderProjects() {
+  loading();
+  const data = await api('/api/projects');
+  const cards = data.projects.map((project) => {
+    const state = project.completed ? 'done' : project.unlocked ? 'open' : 'locked';
+    const action = project.unlocked
+      ? `<a class="button ${project.completed ? 'ghost' : 'blue'}" href="#/projects/${project.id}">${project.completed ? 'Открыть снова' : 'Начать проект'} <span>→</span></a>`
+      : `<span class="project-lock">🔒 После ${project.min_lessons} уроков и предыдущего проекта</span>`;
+    return `<article class="project-card card ${state}"><div class="project-icon">${project.icon}</div><div class="project-info"><p class="eyebrow">Проект ${project.order} · ${esc(project.level)}</p><h2>${esc(project.title)}</h2><p>${esc(project.subtitle)}</p><div class="project-skills">${project.skills.map((skill) => `<span>${esc(skill)}</span>`).join('')}</div></div><div class="project-action">${action}<small>⚡ ${project.xp} XP</small></div></article>`;
+  }).join('');
+  view.innerHTML = `<section class="projects-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="projects-hero card"><p class="eyebrow">Мастерская</p><h1>Проекты: от идеи к инструменту</h1><p class="lead">Здесь ты собираешь маленькие работающие программы. Каждая следующая задача добавляет один новый приём, а подсказки остаются рядом.</p></article><aside class="practice-brief"><strong>🧰 Как проходить проект</strong><p>Сначала запусти заготовку, затем меняй одну часть за раз. Проверка использует примеры, а консоль показывает реальное выполнение.</p></aside><section class="project-list">${cards}</section></section>`;
+}
+
+async function renderProject(id) {
+  loading();
+  const project = await api(`/api/projects/${id}`);
+  const domId = `project-${project.id}`;
+  const exampleInputs = (project.input_example || []).join('\n');
+  view.innerHTML = `<section class="project-workspace"><a class="back-link" href="#/projects">← Ко всем проектам</a><article class="project-hero card"><div class="project-icon">${project.icon}</div><div><p class="eyebrow">Проект ${project.order} · ${esc(project.level)} · ⚡ ${project.xp} XP</p><h1>${esc(project.title)}</h1><p class="lead">${esc(project.description)}</p></div></article><section class="project-plan card"><div><h2>Что соберём</h2><ul>${project.checklist.map((item) => `<li>${esc(item)}</li>`).join('')}</ul></div><div><h2>Инструменты</h2><div class="project-skills">${project.skills.map((skill) => `<span>${esc(skill)}</span>`).join('')}</div></div></section><aside class="learning-roadmap"><strong>Без спешки</strong><span>1. Запусти заготовку</span><span>2. Измени один шаг</span><span>3. Проверь проект</span><p>Подсказки можно открывать в любой момент. Консоль ниже показывает, что действительно произошло.</p></aside><section class="project-editor card"><p class="eyebrow">Редактор проекта</p><textarea class="code-editor" data-answer-q="${domId}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(project.starter)}</textarea><details class="code-input-panel" ${exampleInputs ? 'open' : ''}><summary>⌨️ Данные для input() <small>необязательно</small></summary><p>Одна строка — один ответ. Меняй их и нажимай «Запустить», чтобы увидеть другой сценарий.</p><textarea class="code-stdin" data-input-q="${domId}" placeholder="Данные для запуска" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(exampleInputs)}</textarea></details><div class="code-actions"><button class="button ghost" type="button" data-project-run>▷ Запустить</button><button class="button blue" type="button" data-project-submit>✓ Проверить проект</button></div><div class="project-hints">${project.hints.map((hint, index) => `<details class="hint"><summary>Подсказка ${index + 1}</summary><p>${esc(hint)}</p></details>`).join('')}</div><div class="inline-result" id="result-${domId}"></div></section></section>`;
+  const editor = view.querySelector(`[data-answer-q="${domId}"]`);
+  const runButton = view.querySelector('[data-project-run]');
+  const submitButton = view.querySelector('[data-project-submit]');
+  runButton.addEventListener('click', async () => {
+    runButton.disabled = true; runButton.textContent = 'Запускаем…';
+    try {
+      const result = await api(`/api/projects/${id}/run`, { method: 'POST', body: JSON.stringify({ answer: editor.value, inputs: getCodeInputs(view, domId) }) });
+      showInline(domId, result.correct, result.message, result.checks, result.output);
+    } catch (error) { showInline(domId, false, error.message); }
+    runButton.disabled = false; runButton.textContent = '▷ Запустить';
+  });
+  submitButton.addEventListener('click', async () => {
+    submitButton.disabled = true; submitButton.textContent = 'Проверяем…';
+    try {
+      const result = await api(`/api/projects/${id}/submit`, { method: 'POST', body: JSON.stringify({ answer: editor.value }) });
+      showInline(domId, result.correct, result.message, result.checks, result.output);
+      if (result.correct) {
+        await refreshDashboard();
+        toast(result.xp_gained ? `Проект завершён! +${result.xp_gained} XP` : 'Проект уже был завершён — можно улучшать решение.');
+      }
+    } catch (error) { showInline(domId, false, error.message); }
+    submitButton.disabled = false; submitButton.textContent = '✓ Проверить проект';
+  });
+}
+
 function getCodeInputs(scope, questionId) {
   const value = scope.querySelector(`[data-input-q="${questionId}"]`)?.value || '';
   return value ? value.replaceAll('\r\n', '\n').split('\n') : [];
@@ -305,9 +361,11 @@ async function renderExam(moduleId) {
     event.preventDefault();
     const button = form.querySelector('[type="submit"]'); button.disabled = true;
     try {
-      const result = await api(`/api/exams/${moduleId}/submit`, { method: 'POST', body: JSON.stringify({ answers: getAnswers(form, exam.questions) }) });
+      const answers = getAnswers(form, exam.questions);
+      const result = await api(`/api/exams/${moduleId}/submit`, { method: 'POST', body: JSON.stringify({ answers }) });
       document.querySelector('#submission-result')?.remove();
-      form.insertAdjacentHTML('afterend', submissionResult(result, 'Пересдать экзамен'));
+      form.nextElementSibling?.classList?.contains('execution-panel') && form.nextElementSibling.remove();
+      form.insertAdjacentHTML('afterend', submissionResult(result, 'Пересдать экзамен', answers));
       result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks, item.output));
       await refreshDashboard();
       if (result.passed) toast(`Экзамен сдан! +${result.xp_gained} XP`);
@@ -322,6 +380,8 @@ async function render() {
   try {
     if (current === '/') { loading(); renderDashboard(await refreshDashboard()); }
     else if (current === '/practice') await renderPractice();
+    else if (current === '/projects') await renderProjects();
+    else if (current.startsWith('/projects/')) await renderProject(current.split('/')[2]);
     else if (current.startsWith('/lesson/')) await renderLesson(current.split('/')[2]);
     else if (current.startsWith('/exam/')) await renderExam(current.split('/')[2]);
     else { location.hash = '#/'; }
