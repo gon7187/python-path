@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#58cc02" />
+    <title>Python Path — учи Python каждый день</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Source+Code+Pro:wght@500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <header class="topbar">
+      <a class="brand" href="#/" aria-label="На главную Python Path"><span class="brand-mark">&gt;_</span><span>Python<span>Path</span></span></a>
+      <div class="top-stats" aria-label="Ваш прогресс">
+        <span title="Серия занятий">🔥 <b id="streak">0</b></span>
+        <span title="Опыт">⚡ <b id="xp">0</b> XP</span>
+      </div>
+    </header>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="nav-link" data-nav="/" href="#/"><span>⌂</span> Главная</a>
+        <a class="nav-link" data-nav="/practice" href="#/practice"><span>🎯</span> Практика</a>
+        <button class="nav-link nav-reset" id="reset-button" type="button"><span>↺</span> Сбросить прогресс</button>
+        <div class="sidebar-tip"><span>💡</span><p>15 минут в день дают устойчивый прогресс.</p></div>
+      </aside>
+      <main id="view" class="view" tabindex="-1"><div class="loading"><i></i><i></i><i></i> Загружаем путь…</div></main>
+    </div>
+    <nav class="bottom-nav">
+      <a data-nav="/" href="#/"><span>⌂</span>Главная</a>
+      <a data-nav="/practice" href="#/practice"><span>🎯</span>Практика</a>
+    </nav>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
