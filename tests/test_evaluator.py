@@ -17,6 +17,22 @@ def test_code_runner_supports_simple_class() -> None:
     assert result["correct"] is True
 
 
+def test_code_runner_simulates_input_and_returns_console_output() -> None:
+    result = run_code(
+        "name = input('Имя: ')\nprint(f'Привет, {name}!')\n",
+        [{"kind": "stdout", "expected": "Имя: Лена\nПривет, Лена!"}],
+        ["Лена"],
+    )
+    assert result["correct"] is True
+    assert result["output"] == "Имя: Лена\nПривет, Лена!\n"
+
+
+def test_code_runner_explains_when_input_value_is_missing() -> None:
+    result = run_code("name = input('Имя: ')\n", [], [])
+    assert result["correct"] is False
+    assert "не хватает строки" in result["message"]
+
+
 def test_code_runner_blocks_imports() -> None:
     result = run_code("import os\n", [])
     assert result["correct"] is False

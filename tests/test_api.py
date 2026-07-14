@@ -64,6 +64,22 @@ def test_extended_course_unlocks_after_foundation() -> None:
         client.post("/api/reset")
 
 
+def test_editor_runs_code_with_simulated_input() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/code/run",
+            json={
+                "question_id": "warmup-input-code",
+                "answer": "name = input('Имя: ')\nprint(f'Привет, {name}!')\n",
+                "inputs": ["Мира"],
+            },
+        )
+        result = response.json()
+        assert response.status_code == 200
+        assert result["correct"] is True
+        assert result["output"] == "Имя: Мира\nПривет, Мира!\n"
+
+
 def test_practice_sessions_are_guided_and_repeat_errors() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")

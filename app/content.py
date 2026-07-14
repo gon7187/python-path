@@ -35,9 +35,15 @@ def text(question_id: str, prompt: str, answers: list[str], explanation: str) ->
 
 
 def code(
-    question_id: str, prompt: str, starter: str, tests: list[dict], explanation: str, hint: str
+    question_id: str,
+    prompt: str,
+    starter: str,
+    tests: list[dict],
+    explanation: str,
+    hint: str,
+    test_inputs: list[str] | None = None,
 ) -> dict:
-    return {
+    question = {
         "id": question_id,
         "kind": "code",
         "prompt": prompt,
@@ -46,6 +52,10 @@ def code(
         "explanation": explanation,
         "hint": hint,
     }
+    if test_inputs:
+        question["test_inputs"] = test_inputs
+        question["input_example"] = test_inputs
+    return question
 
 
 def lesson(
@@ -244,11 +254,12 @@ LESSONS = [
             text("string-len", "Чему равно `len('кот')`?", ["3"], "В слове «кот» три символа."),
             code(
                 "string-code",
-                "Создай `word = 'python'` и выведи его длину.",
-                "word = 'python'\n# выведи длину слова\n",
-                [{"kind": "stdout", "expected": "6"}],
-                "len() возвращает количество символов в строке.",
-                "Передай word в len(), а результат — в print().",
+                "Спроси имя через `input('Имя: ')` и выведи `Привет, <имя>!`.",
+                "name = input('Имя: ')\n# выведи приветствие с name\n",
+                [{"kind": "stdout", "expected": "Имя: Лена\nПривет, Лена!"}],
+                "input() вернул текст, и он подставился в приветствие.",
+                "Используй print(f'Привет, {name}!').",
+                ["Лена"],
             ),
         ],
     ),
@@ -804,7 +815,9 @@ QUESTION_BY_ID = {question["id"]: question for item in LESSONS for question in i
 
 def public_question(question: dict) -> dict:
     return {
-        key: value for key, value in question.items() if key not in {"answer", "answers", "tests"}
+        key: value
+        for key, value in question.items()
+        if key not in {"answer", "answers", "tests", "test_inputs"}
     }
 
 

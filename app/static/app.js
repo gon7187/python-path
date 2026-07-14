@@ -106,8 +106,10 @@ function questionTemplate(question, number, stageLabel = '') {
   } else if (question.kind === 'input') {
     field = `<input class="answer-input" data-answer-q="${question.id}" placeholder="${esc(question.placeholder || 'Введите ответ')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />`;
   } else {
+    const exampleInputs = (question.input_example || []).join('\n');
     field = `<textarea class="code-editor" data-answer-q="${question.id}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(question.starter)}</textarea>
-      <div class="code-actions"><button class="button blue" type="button" data-check-code="${question.id}">▷ Проверить код</button></div>
+      <details class="code-input-panel" ${exampleInputs ? 'open' : ''}><summary>⌨️ Данные для input() <small>необязательно</small></summary><p>Одна строка — один ответ. Они подставятся по порядку при запуске.</p><textarea class="code-stdin" data-input-q="${question.id}" placeholder="Например: Аня" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(exampleInputs)}</textarea></details>
+      <div class="code-actions"><button class="button ghost" type="button" data-run-code="${question.id}">▷ Запустить</button><button class="button blue" type="button" data-check-code="${question.id}">✓ Проверить по заданию</button></div>
       <details class="hint"><summary>Нужна подсказка?</summary><p>${esc(question.hint)}</p></details>`;
   }
   return `<article class="question-card card" data-question="${question.id}">${head}${guide}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
@@ -138,20 +140,35 @@ function bindQuestionControls(scope) {
       button.textContent = 'Проверяем…';
       try {
         const result = await api('/api/code/check', { method: 'POST', body: JSON.stringify({ question_id: questionId, answer: editor.value }) });
-        showInline(questionId, result.correct, result.message, result.checks);
+        showInline(questionId, result.correct, result.message, result.checks, result.output);
       } catch (error) { showInline(questionId, false, error.message); }
       button.disabled = false;
-      button.textContent = '▷ Проверить код';
+      button.textContent = '✓ Проверить по заданию';
+    });
+  });
+  scope.querySelectorAll('[data-run-code]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const questionId = button.dataset.runCode;
+      const editor = scope.querySelector(`[data-answer-q="${questionId}"]`);
+      button.disabled = true;
+      button.textContent = 'Запускаем…';
+      try {
+        const result = await api('/api/code/run', { method: 'POST', body: JSON.stringify({ question_id: questionId, answer: editor.value, inputs: getCodeInputs(scope, questionId) }) });
+        showInline(questionId, result.correct, result.message, result.checks, result.output);
+      } catch (error) { showInline(questionId, false, error.message); }
+      button.disabled = false;
+      button.textContent = '▷ Запустить';
     });
   });
 }
 
-function showInline(questionId, correct, message, checks = []) {
+function showInline(questionId, correct, message, checks = [], output = null) {
   const node = document.querySelector(`#result-${questionId}`);
   if (!node) return;
   const details = checks.length && !correct ? ` <small>(${checks.filter((item) => !item.passed).map((item) => `ожидалось ${esc(item.expected)}, получено ${esc(item.actual)}`).join('; ')})</small>` : '';
+  const consoleOutput = output === null ? '' : `<pre class="code-output">${esc(output || '— программа ничего не вывела —')}</pre>`;
   node.className = `inline-result visible ${correct ? 'ok' : 'no'}`;
-  node.innerHTML = `${correct ? '✓' : '↺'} ${esc(message)}${details}`;
+  node.innerHTML = `${correct ? '✓' : '↺'} ${esc(message)}${details}${consoleOutput}`;
 }
 
 function submissionResult(result, retryText = 'Попробовать ещё раз') {
@@ -187,7 +204,7 @@ async function renderLesson(id) {
       const result = await api(`/api/lessons/${id}/submit`, { method: 'POST', body: JSON.stringify({ answers: getAnswers(form, lesson.questions) }) });
       document.querySelector('#submission-result')?.remove();
       form.insertAdjacentHTML('afterend', submissionResult(result));
-      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks));
+      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks, item.output));
       await refreshDashboard();
       if (result.passed) toast(`+${result.xp_gained} XP — урок пройден!`);
     } catch (error) { toast(error.message); }
@@ -252,7 +269,7 @@ async function renderPractice(mode = 'guided', moduleId = '') {
         const answer = getAnswers(form, [question])[0];
         const result = await api('/api/practice/submit', { method: 'POST', body: JSON.stringify(answer) });
         if (result.correct) correctCount += 1;
-        showInline(question.id, result.correct, result.message, result.checks);
+        showInline(question.id, result.correct, result.message, result.checks, result.output);
         await refreshDashboard();
         if (result.correct) toast(`Верно! +${result.xp_gained} XP`);
         const isLast = index + 1 === total;
@@ -272,6 +289,11 @@ async function renderPractice(mode = 'guided', moduleId = '') {
   renderStep();
 }
 
+function getCodeInputs(scope, questionId) {
+  const value = scope.querySelector(`[data-input-q="${questionId}"]`)?.value || '';
+  return value ? value.replaceAll('\r\n', '\n').split('\n') : [];
+}
+
 async function renderExam(moduleId) {
   loading();
   const exam = await api(`/api/exams/${moduleId}`);
@@ -285,7 +307,7 @@ async function renderExam(moduleId) {
       const result = await api(`/api/exams/${moduleId}/submit`, { method: 'POST', body: JSON.stringify({ answers: getAnswers(form, exam.questions) }) });
       document.querySelector('#submission-result')?.remove();
       form.insertAdjacentHTML('afterend', submissionResult(result, 'Пересдать экзамен'));
-      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks));
+      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks, item.output));
       await refreshDashboard();
       if (result.passed) toast(`Экзамен сдан! +${result.xp_gained} XP`);
     } catch (error) { toast(error.message); }

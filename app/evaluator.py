@@ -18,7 +18,6 @@ FORBIDDEN_NAMES = {
     "exec",
     "exit",
     "help",
-    "input",
     "open",
     "quit",
     "vars",
@@ -62,8 +61,23 @@ SAFE_BUILTINS = {
 }
 source = base64.b64decode(CODE).decode('utf-8')
 tests = json.loads(base64.b64decode(TESTS).decode('utf-8'))
+inputs = json.loads(base64.b64decode(INPUTS).decode('utf-8'))
 namespace = {'__builtins__': SAFE_BUILTINS, '__name__': '__learner__'}
 output = io.StringIO()
+input_values = iter(inputs)
+
+def editor_input(prompt=''):
+    # Имитирует терминал: показывает приглашение и подставляет следующую строку.
+    if prompt:
+        print(str(prompt), end='')
+    try:
+        value = next(input_values)
+    except StopIteration as error:
+        raise EOFError('Для input() не хватает строки в поле «Данные для input()».') from error
+    print(value)
+    return value
+
+SAFE_BUILTINS['input'] = editor_input
 try:
     with contextlib.redirect_stdout(output):
         exec(compile(source, '<learner-code>', 'exec'), namespace, namespace)
@@ -74,9 +88,9 @@ try:
         else:
             actual = eval(test['call'], namespace, namespace)
         checks.append({'passed': actual == test['expected'], 'actual': repr(actual), 'expected': repr(test['expected'])})
-    print(json.dumps({'ok': all(item['passed'] for item in checks), 'checks': checks}, ensure_ascii=False))
+    print(json.dumps({'ok': all(item['passed'] for item in checks), 'checks': checks, 'output': output.getvalue()}, ensure_ascii=False))
 except Exception as error:
-    print(json.dumps({'ok': False, 'error': f'{type(error).__name__}: {error}', 'checks': []}, ensure_ascii=False))
+    print(json.dumps({'ok': False, 'error': f'{type(error).__name__}: {error}', 'checks': [], 'output': output.getvalue()}, ensure_ascii=False))
 """
 
 
@@ -84,10 +98,16 @@ def normalize(value: Any) -> str:
     return str(value or "").strip().casefold()
 
 
-def run_code(source: str, tests: list[dict]) -> dict:
+def run_code(source: str, tests: list[dict], inputs: list[str] | None = None) -> dict:
     """Выполняет небольшой фрагмент в отдельном Python-процессе с лимитом времени."""
     if len(source) > 5_000:
         return {"correct": False, "message": "Решение слишком длинное для этого задания."}
+    input_values = [str(value) for value in inputs or []]
+    if len(input_values) > 20 or any(len(value) > 500 for value in input_values):
+        return {
+            "correct": False,
+            "message": "Для запуска можно передать до 20 строк, каждая не длиннее 500 символов.",
+        }
     try:
         SafetyVisitor().visit(ast.parse(source))
     except (SyntaxError, ValueError) as error:
@@ -97,7 +117,14 @@ def run_code(source: str, tests: list[dict]) -> dict:
     encoded_tests = base64.b64encode(json.dumps(tests, ensure_ascii=False).encode("utf-8")).decode(
         "ascii"
     )
-    program = RUNNER.replace("CODE", repr(encoded_code)).replace("TESTS", repr(encoded_tests))
+    encoded_inputs = base64.b64encode(
+        json.dumps(input_values, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
+    program = (
+        RUNNER.replace("CODE", repr(encoded_code))
+        .replace("TESTS", repr(encoded_tests))
+        .replace("INPUTS", repr(encoded_inputs))
+    )
     try:
         result = subprocess.run(
             [sys.executable, "-I", "-c", program],
@@ -118,13 +145,24 @@ def run_code(source: str, tests: list[dict]) -> dict:
         }
 
     if payload.get("error"):
-        return {"correct": False, "message": f"Почти: {payload['error']}", "checks": []}
+        return {
+            "correct": False,
+            "message": f"Почти: {payload['error']}",
+            "checks": [],
+            "output": payload.get("output", ""),
+        }
     if payload.get("ok"):
-        return {"correct": True, "message": "Все тесты пройдены!", "checks": payload["checks"]}
+        return {
+            "correct": True,
+            "message": "Код выполнился." if not tests else "Все тесты пройдены!",
+            "checks": payload["checks"],
+            "output": payload.get("output", ""),
+        }
     return {
         "correct": False,
         "message": "Не все тесты прошли. Сверь результат с условием.",
         "checks": payload.get("checks", []),
+        "output": payload.get("output", ""),
     }
 
 
@@ -138,7 +176,7 @@ def evaluate(question: dict, answer: Any) -> dict:
         correct = normalize(answer) in {normalize(item) for item in question["answers"]}
         return {"correct": correct, "message": question["explanation"]}
     if kind == "code":
-        result = run_code(str(answer or ""), question["tests"])
+        result = run_code(str(answer or ""), question["tests"], question.get("test_inputs"))
         result["explanation"] = question["explanation"]
         return result
     raise ValueError(f"Неизвестный тип задания: {kind}")
