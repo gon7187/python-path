@@ -1,5 +1,8 @@
 # Python Path
 
+[![CI](https://github.com/gon7187/python-path/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gon7187/python-path/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > Русскоязычный тренажёр Python в духе Duolingo: короткая теория, проверяемая практика и плавный путь от первого `print()` до собственных проектов.
 
 ## Зачем этот проект
