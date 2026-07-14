@@ -1,5 +1,6 @@
 const view = document.querySelector('#view');
 let dashboard = null;
+const MODULE_COLLAPSE_KEY = 'python-path-module-collapse';
 const sandboxHistory = [];
 const sandboxSamples = [
   { label: 'Вывод текста', code: "print('Привет, Python!')\n", inputs: [] },
@@ -10,6 +11,23 @@ const sandboxSamples = [
 const esc = (value = '') => String(value)
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const rich = (value = '') => esc(value).replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+
+function moduleCollapseStates() {
+  try { return JSON.parse(localStorage.getItem(MODULE_COLLAPSE_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function isModuleCollapsed(module) {
+  if (module.completed !== module.total) return false;
+  const states = moduleCollapseStates();
+  return states[module.id] ?? true;
+}
+
+function saveModuleCollapsed(moduleId, collapsed) {
+  const states = moduleCollapseStates();
+  states[moduleId] = collapsed;
+  localStorage.setItem(MODULE_COLLAPSE_KEY, JSON.stringify(states));
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -76,6 +94,17 @@ function renderDashboard(data) {
     ${moduleHtml}
     <div class="section-heading"><div><h2>Коллекция достижений</h2><p>Маленькие победы поддерживают ритм.</p></div></div>
     <section class="badges">${badgeHtml}</section>`;
+  view.querySelectorAll('[data-module-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const module = button.closest('.module');
+      const body = module.querySelector('[data-module-body]');
+      const collapsed = !body.hidden;
+      body.hidden = collapsed;
+      button.setAttribute('aria-expanded', String(!collapsed));
+      button.querySelector('.module-collapse').textContent = collapsed ? 'Развернуть ▾' : 'Свернуть ▴';
+      saveModuleCollapsed(button.dataset.moduleToggle, collapsed);
+    });
+  });
 }
 
 function renderModule(module) {
@@ -92,10 +121,15 @@ function renderModule(module) {
   const examMarkup = exam.available
     ? `<a class="button ${exam.passed ? 'ghost' : 'blue'}" href="#/exam/${module.id}">${exam.passed ? `Сдан: ${exam.score} б.` : 'Пройти'}</a>`
     : '<button class="button ghost" disabled>🔒 Закрыт</button>';
+  const collapsed = isModuleCollapsed(module);
+  const title = `<div><h2>${module.icon} ${esc(module.title)}</h2><p>${esc(module.description)}</p></div><span class="module-progress">${module.completed} из ${module.total}<br>уроков</span>`;
+  const header = module.completed === module.total
+    ? `<button class="module-title ${module.color} module-toggle" type="button" data-module-toggle="${module.id}" aria-expanded="${String(!collapsed)}">${title}<span class="module-collapse">${collapsed ? 'Развернуть ▾' : 'Свернуть ▴'}</span></button>`
+    : `<div class="module-title ${module.color}">${title}</div>`;
   return `<section class="module card">
-    <div class="module-title ${module.color}"><div><h2>${module.icon} ${esc(module.title)}</h2><p>${esc(module.description)}</p></div><span class="module-progress">${module.completed} из ${module.total}<br>уроков</span></div>
-    <div class="lesson-list">${lessons}</div>
-    <div class="exam-row"><div><strong>🏆 ${module.id === 'realworld' ? 'Финальный экзамен' : 'Мини-экзамен раздела'}</strong><p>${exam.available ? 'Проверь раздел и получи +50 XP.' : 'Откроется после всех уроков раздела.'}</p></div>${examMarkup}</div>
+    ${header}
+    <div data-module-body ${collapsed ? 'hidden' : ''}><div class="lesson-list">${lessons}</div>
+    <div class="exam-row"><div><strong>🏆 ${module.id === 'realworld' ? 'Финальный экзамен' : 'Мини-экзамен раздела'}</strong><p>${exam.available ? 'Проверь раздел и получи +50 XP.' : 'Откроется после всех уроков раздела.'}</p></div>${examMarkup}</div></div>
   </section>`;
 }
 
