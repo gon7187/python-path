@@ -1,8 +1,9 @@
-"""Русский учебный план: 12 уроков, практика и контрольные точки."""
+"""Русский учебный план: мягкий старт, практика и контрольные точки."""
 
 from __future__ import annotations
 
 from app.extended_curriculum import EXTRA_EXAMS, EXTRA_LESSONS, EXTRA_MODULES
+from app.gentle_start import GENTLE_START_EXAMS, GENTLE_START_LESSONS, GENTLE_START_MODULES
 
 
 def theory(title: str, text: str, example: str, tip: str = "") -> dict:
@@ -72,6 +73,7 @@ def lesson(
 
 
 MODULES = [
+    *GENTLE_START_MODULES,
     {
         "id": "start",
         "title": "Старт: говорим с Python",
@@ -104,6 +106,7 @@ MODULES = [
 
 
 LESSONS = [
+    *GENTLE_START_LESSONS,
     lesson(
         "hello",
         "start",
@@ -731,7 +734,41 @@ MODULES.extend(EXTRA_MODULES)
 LESSONS.extend(EXTRA_LESSONS)
 
 
+def default_guide(question: dict) -> str:
+    """Даёт опору до ответа, а не только объяснение после ошибки."""
+    kind = question["kind"]
+    if kind == "code":
+        return (
+            "Работай маленькими шагами: 1) прочитай заготовку; 2) сделай только то, "
+            f"о чём просит задание; 3) нажми «Проверить код». {question['hint']}"
+        )
+    if kind == "input":
+        return "Ответ короткий. Найди ключевое слово или результат в примере выше и введи его без лишнего текста."
+    return "Сначала вспомни пример из объяснения. Затем исключи варианты, которые не относятся к правилу урока."
+
+
+def add_learning_scaffolds() -> None:
+    """Добавляет повторяемый педагогический шаг ко всем урокам курса."""
+    for item in LESSONS:
+        item["theory"].append(
+            theory(
+                "Перед практикой: не нужно угадывать",
+                "Посмотри на пример ещё раз. Выполняй задание по одному действию и проверяй код отдельно. Ошибка — это подсказка, а не оценка твоих способностей.",
+                "# 1. Прочитай задание\n# 2. Повтори маленький шаг\n# 3. Проверь результат",
+                "Если застрял, открой подсказку и измени в примере только одну часть.",
+            )
+        )
+        for question in item["questions"]:
+            question.setdefault("guide", default_guide(question))
+
+
+add_learning_scaffolds()
+for lesson_order, item in enumerate(LESSONS, start=1):
+    item["order"] = lesson_order
+
+
 EXAMS = {
+    **GENTLE_START_EXAMS,
     "start": {
         "title": "Мини-экзамен: основы",
         "description": "Проверь, уверенно ли ты пишешь первые программы.",

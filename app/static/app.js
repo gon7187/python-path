@@ -94,7 +94,11 @@ function renderModule(module) {
 }
 
 function questionTemplate(question, number) {
-  const head = `<div class="question-number">Задание ${number}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
+  const stages = ['Разминка: узнай идею', 'Повтори с опорой', 'Сделай сам, но по плану'];
+  const head = `<div class="question-number">${stages[number - 1] || `Задание ${number}`}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
+  const guide = question.guide
+    ? `<aside class="task-guide"><strong>🧭 Как подойти</strong><p>${rich(question.guide)}</p></aside>`
+    : '';
   let field = '';
   if (question.kind === 'choice') {
     field = `<div class="options">${question.options.map((option) => `<button type="button" class="option" data-choice-q="${question.id}" data-value="${esc(option)}">${esc(option)}</button>`).join('')}</div>`;
@@ -105,7 +109,7 @@ function questionTemplate(question, number) {
       <div class="code-actions"><button class="button blue" type="button" data-check-code="${question.id}">▷ Проверить код</button></div>
       <details class="hint"><summary>Нужна подсказка?</summary><p>${esc(question.hint)}</p></details>`;
   }
-  return `<article class="question-card card" data-question="${question.id}">${head}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
+  return `<article class="question-card card" data-question="${question.id}">${head}${guide}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
 }
 
 function getAnswers(scope, questions) {
@@ -160,11 +164,16 @@ function submissionResult(result, retryText = 'Попробовать ещё р�
 async function renderLesson(id) {
   loading();
   const lesson = await api(`/api/lessons/${id}`);
+  const theoryCards = lesson.theory.map((card, index) => `<article class="theory-card card">
+    <p class="theory-step">Шаг ${index + 1} из ${lesson.theory.length}</p><h2>${esc(card.title)}</h2><p>${esc(card.text)}</p>
+    <p class="example-label">Разберём пример</p><pre class="code-example"><code>${esc(card.example)}</code></pre>${card.tip ? `<div class="tip">${esc(card.tip)}</div>` : ''}
+  </article>`).join('');
   view.innerHTML = `<section>
     <a class="back-link" href="#/">← К маршруту</a>
-    <div class="lesson-head"><div><p class="eyebrow">Урок ${lesson.order} · ${lesson.duration} минут</p><h1>${esc(lesson.title)}</h1><p class="lead">${esc(lesson.subtitle)}</p><p class="lesson-meta"><span>⚡ ${lesson.xp} XP</span><span>🧩 3 задания</span></p></div></div>
-    <section>${lesson.theory.map((card) => `<article class="theory-card card"><h2>${esc(card.title)}</h2><p>${esc(card.text)}</p><pre class="code-example"><code>${esc(card.example)}</code></pre>${card.tip ? `<div class="tip">${esc(card.tip)}</div>` : ''}</article>`).join('')}</section>
-    <h2 class="practice-title">Проверь себя</h2><p class="lead">Нужно минимум 2 правильных ответа, чтобы открыть следующий урок.</p>
+    <div class="lesson-head"><div><p class="eyebrow">Урок ${lesson.order} · ${lesson.duration} минут</p><h1>${esc(lesson.title)}</h1><p class="lead">${esc(lesson.subtitle)}</p><p class="lesson-meta"><span>⚡ ${lesson.xp} XP</span><span>🧩 ${lesson.questions.length} задания</span></p></div></div>
+    <aside class="learning-roadmap"><strong>Без спешки</strong><span>1. Прочитай объяснение</span><span>2. Разбери пример</span><span>3. Выполни шаги в задаче</span><p>Не надо держать всё в голове: примеры и подсказки можно открывать во время решения.</p></aside>
+    <section>${theoryCards}</section>
+    <h2 class="practice-title">Сделаем вместе</h2><p class="lead">У каждой задачи есть план. Код можно проверять сколько угодно раз; для прохождения достаточно 2 правильных ответов.</p>
     <form id="lesson-form">${lesson.questions.map(questionTemplate).join('')}<div class="submit-row"><button class="button" type="submit">Проверить урок <span>→</span></button><span class="submit-note">Проверяй код отдельно, прежде чем сдавать.</span></div></form>
   </section>`;
   const form = document.querySelector('#lesson-form');

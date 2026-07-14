@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
     Browser["Браузер / мобильный UI"] --> API["FastAPI\napp/main.py"]
-    API --> Content["Курс и задания\ncontent.py + extended_curriculum.py"]
+    API --> Content["Курс и задания\ncontent.py + gentle_start.py + extended_curriculum.py"]
     API --> Evaluator["Проверка ответов\nevaluator.py"]
     API --> DB[("SQLite\npython_path.db")]
     Evaluator --> Runner["Изолированный Python-процесс\nтаймаут 2 с"]
@@ -21,7 +21,7 @@ flowchart LR
 
 ### Контент
 
-`content.py` содержит базовые 12 уроков, `extended_curriculum.py` добавляет 108 уроков через структурированный каталог. Такой подход даёт полную программу, не размазывая сотни почти одинаковых структур по роутам.
+`gentle_start.py` добавляет 19 очень коротких уроков перед основным маршрутом: одна идея, разбор примера и безопасная практика. `content.py` содержит базовые 12 уроков, а `extended_curriculum.py` добавляет ещё 108 через структурированный каталог. Перед практикой `content.py` добавляет каждому уроку опору и план решения каждой задачи.
 
 ### Прогресс
 
