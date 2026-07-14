@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -36,6 +36,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Python Path", version="1.0.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+QUESTION_LESSON = {question["id"]: lesson for lesson in LESSONS for question in lesson["questions"]}
 
 
 class Answer(BaseModel):
@@ -90,20 +92,38 @@ def course_payload() -> dict:
     return {"modules": module_payloads}
 
 
+def next_lesson_for(snapshot: dict) -> dict | None:
+    """Выбирает продолжение, не отправляя старого ученика в новый вводный блок."""
+    unlocked = [
+        item
+        for item in LESSONS
+        if status_for(item, snapshot["lessons"])["unlocked"]
+        and item["id"] not in snapshot["lessons"]
+    ]
+    if not unlocked:
+        return None
+
+    has_legacy_progress = any(
+        lesson["module_id"] != "gentle-start" and lesson["id"] in snapshot["lessons"]
+        for lesson in LESSONS
+    )
+    has_gentle_start_progress = any(
+        lesson["module_id"] == "gentle-start" and lesson["id"] in snapshot["lessons"]
+        for lesson in LESSONS
+    )
+    if has_legacy_progress and not has_gentle_start_progress:
+        legacy_unlocked = [item for item in unlocked if item["module_id"] != "gentle-start"]
+        if legacy_unlocked:
+            return legacy_unlocked[0]
+    return unlocked[0]
+
+
 def dashboard_payload() -> dict:
     snapshot = state()
     course = course_payload()
     completed = len(snapshot["lessons"])
     total = len(LESSONS)
-    next_lesson = next(
-        (
-            item
-            for item in LESSONS
-            if status_for(item, snapshot["lessons"])["unlocked"]
-            and item["id"] not in snapshot["lessons"]
-        ),
-        None,
-    )
+    next_lesson = next_lesson_for(snapshot)
     achievements = [
         {
             "id": "first",
@@ -208,25 +228,131 @@ def submit_lesson(lesson_id: str, submission: Submission) -> dict:
     }
 
 
+def available_practice_lessons(snapshot: dict) -> list[dict]:
+    """Возвращает завершённые уроки и текущий открытый шаг — не будущие темы."""
+    lessons = [lesson for lesson in LESSONS if status_for(lesson, snapshot["lessons"])["unlocked"]]
+    return lessons or [LESSONS[0]]
+
+
+def current_practice_lesson(lessons: list[dict], snapshot: dict) -> dict:
+    return next(
+        (lesson for lesson in lessons if lesson["id"] not in snapshot["lessons"]), lessons[-1]
+    )
+
+
+def practice_modules(lessons: list[dict]) -> list[dict]:
+    lesson_module_ids = {lesson["module_id"] for lesson in lessons}
+    return [
+        {"id": module["id"], "title": module["title"], "icon": module["icon"]}
+        for module in MODULES
+        if module["id"] in lesson_module_ids
+    ]
+
+
+def practice_questions(
+    mode: str, module_id: str | None, limit: int, snapshot: dict
+) -> tuple[list[dict], str, str, str]:
+    """Собирает небольшую осмысленную серию вместо случайного одиночного вопроса."""
+    lessons = available_practice_lessons(snapshot)
+    current = current_practice_lesson(lessons, snapshot)
+    all_questions = [question for lesson in lessons for question in lesson["questions"]]
+
+    if mode == "guided":
+        questions = current["questions"]
+        return (
+            questions[:limit],
+            "По текущему шагу",
+            f"Закрепляем тему «{current['title']}» в спокойном порядке: понять, повторить, применить.",
+            "Сначала опирайся на пример из урока. В этой серии не будет ничего из будущих тем.",
+        )
+
+    if mode == "review":
+        weak_ids = set(snapshot["weak_question_ids"])
+        weak = [question for question in all_questions if question["id"] in weak_ids]
+        if weak:
+            filler = [question for question in current["questions"] if question not in weak]
+            return (
+                (weak + filler)[:limit],
+                "Повторяем ошибки",
+                "Здесь только уже встречавшиеся сложные места. Ошибка — повод потренировать навык, а не оценка.",
+                "Прочитай план к каждому заданию и решай его заново, не пытаясь вспомнить прежний ответ.",
+            )
+        return (
+            current["questions"][:limit],
+            "Чистое повторение",
+            "Пока нет ошибок для разбора — закрепим текущий шаг без спешки.",
+            "После первых ошибок этот режим будет подбирать их автоматически.",
+        )
+
+    if mode == "mixed":
+        by_kind = {
+            kind: [question for question in all_questions if question["kind"] == kind]
+            for kind in ("choice", "input", "code")
+        }
+        questions = [by_kind[kind][0] for kind in ("choice", "input", "code") if by_kind[kind]]
+        questions.extend(question for question in all_questions if question not in questions)
+        return (
+            questions[:limit],
+            "Смешанная серия",
+            "Небольшая серия из уже открытых тем: сначала вспомни правило, потом назови его и примени в коде.",
+            "Темы могут отличаться, но каждая уже есть в твоём маршруте. Не спеши и читай план задания.",
+        )
+
+    if mode == "module":
+        if not module_id:
+            raise HTTPException(status_code=422, detail="Выбери тему для тренировки")
+        module_lessons = [lesson for lesson in lessons if lesson["module_id"] == module_id]
+        if not module_lessons:
+            raise HTTPException(status_code=403, detail="Эта тема ещё не открыта в маршруте")
+        lesson = current_practice_lesson(module_lessons, snapshot)
+        module = next(item for item in MODULES if item["id"] == module_id)
+        return (
+            lesson["questions"][:limit],
+            f"Тема: {module['title']}",
+            f"Тренируем «{lesson['title']}» внутри выбранной темы — от простого вопроса к коду.",
+            "Если нужен пример, вернись к карточке урока: практика проверяет понимание, а не память наизусть.",
+        )
+
+    raise HTTPException(status_code=422, detail="Неизвестный режим практики")
+
+
+@app.get("/api/practice/session")
+def practice_session(
+    mode: str = "guided",
+    module_id: str | None = None,
+    limit: int = Query(default=3, ge=1, le=5),
+) -> dict:
+    snapshot = state()
+    questions, title, description, tip = practice_questions(mode, module_id, limit, snapshot)
+    return {
+        "mode": mode,
+        "title": title,
+        "description": description,
+        "tip": tip,
+        "questions": [
+            {**public_question(question), "lesson_title": QUESTION_LESSON[question["id"]]["title"]}
+            for question in questions
+        ],
+        "available_modules": practice_modules(available_practice_lessons(snapshot)),
+        "weak_count": len(
+            [
+                question_id
+                for question_id in snapshot["weak_question_ids"]
+                if question_id in QUESTION_BY_ID
+            ]
+        ),
+    }
+
+
 @app.get("/api/practice")
 def practice() -> dict:
-    snapshot = state()
-    candidate_ids = [item for item in snapshot["weak_question_ids"] if item in QUESTION_BY_ID]
-    if not candidate_ids:
-        candidate_ids = [
-            question["id"]
-            for item in LESSONS
-            if status_for(item, snapshot["lessons"])["unlocked"]
-            for question in item["questions"]
-        ]
-    if not candidate_ids:
-        candidate_ids = [question["id"] for question in LESSONS[0]["questions"]]
-    question = QUESTION_BY_ID[candidate_ids[0]]
-    source = next(item for item in LESSONS if question in item["questions"])
+    """Сохраняет совместимость со старым экраном и внешними клиентами API."""
+    session = practice_session()
+    question = session["questions"][0]
     return {
-        "question": public_question(question),
-        "lesson_title": source["title"],
-        "is_review": question["id"] in snapshot["weak_question_ids"],
+        "question": question,
+        "lesson_title": question["lesson_title"],
+        "is_review": session["mode"] == "review",
     }
 
 

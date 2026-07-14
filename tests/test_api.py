@@ -62,3 +62,47 @@ def test_extended_course_unlocks_after_foundation() -> None:
         assert code_check.status_code == 200
         assert code_check.json()["correct"] is True
         client.post("/api/reset")
+
+
+def test_practice_sessions_are_guided_and_repeat_errors() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+
+        session = client.get("/api/practice/session?mode=guided").json()
+        assert session["title"] == "По текущему шагу"
+        assert [question["kind"] for question in session["questions"]] == [
+            "choice",
+            "input",
+            "code",
+        ]
+        assert all(question["guide"] for question in session["questions"])
+        assert session["available_modules"][0]["id"] == "gentle-start"
+
+        client.post(
+            "/api/practice/submit",
+            json={"question_id": "warmup-route-choice", "answer": "неверный ответ"},
+        )
+        review = client.get("/api/practice/session?mode=review").json()
+        assert review["title"] == "Повторяем ошибки"
+        assert review["questions"][0]["id"] == "warmup-route-choice"
+
+        module_session = client.get(
+            "/api/practice/session?mode=module&module_id=gentle-start"
+        ).json()
+        assert module_session["title"].startswith("Тема:")
+        assert {question["lesson_title"] for question in module_session["questions"]} == {
+            "Как проходить урок"
+        }
+        client.post("/api/reset")
+
+
+def test_legacy_progress_continues_past_new_gentle_start() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        for lesson_id in ("hello", "variables"):
+            lesson = next(item for item in LESSONS if item["id"] == lesson_id)
+            save_lesson(lesson_id, 2, 3, lesson["xp"])
+
+        dashboard = client.get("/api/dashboard").json()
+        assert dashboard["next_lesson"]["id"] == "strings-input"
+        client.post("/api/reset")

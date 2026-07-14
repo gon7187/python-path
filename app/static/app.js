@@ -93,9 +93,10 @@ function renderModule(module) {
   </section>`;
 }
 
-function questionTemplate(question, number) {
+function questionTemplate(question, number, stageLabel = '') {
   const stages = ['Разминка: узнай идею', 'Повтори с опорой', 'Сделай сам, но по плану'];
-  const head = `<div class="question-number">${stages[number - 1] || `Задание ${number}`}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
+  const label = stageLabel || stages[number - 1] || `Задание ${number}`;
+  const head = `<div class="question-number">${label}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
   const guide = question.guide
     ? `<aside class="task-guide"><strong>🧭 Как подойти</strong><p>${rich(question.guide)}</p></aside>`
     : '';
@@ -194,23 +195,81 @@ async function renderLesson(id) {
   });
 }
 
-async function renderPractice() {
+async function renderPractice(mode = 'guided', moduleId = '') {
   loading();
-  const data = await api('/api/practice');
-  const question = data.question;
-  view.innerHTML = `<section class="practice-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="practice-hero card"><p class="eyebrow">Тренировка</p><h1>${data.is_review ? 'Повторим слабое место' : 'Быстрая практика'}</h1><p class="lead">${data.is_review ? `Это задание из темы «${esc(data.lesson_title)}» стоит закрепить.` : `Небольшой повтор из темы «${esc(data.lesson_title)}».`}</p></article><form id="practice-form">${questionTemplate(question, 1)}<div class="submit-row"><button class="button" type="submit">Проверить <span>→</span></button><a class="button ghost" href="#/practice">Другое задание</a></div></form></section>`;
-  const form = document.querySelector('#practice-form');
-  bindQuestionControls(form);
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const answer = getAnswers(form, [question])[0];
-    try {
-      const result = await api('/api/practice/submit', { method: 'POST', body: JSON.stringify(answer) });
-      showInline(question.id, result.correct, result.message, result.checks);
-      await refreshDashboard();
-      if (result.correct) toast(`Верно! +${result.xp_gained} XP`);
-    } catch (error) { toast(error.message); }
+  const params = new URLSearchParams({ mode });
+  if (moduleId) params.set('module_id', moduleId);
+  const session = await api(`/api/practice/session?${params}`);
+  let index = 0;
+  let correctCount = 0;
+
+  const modeButton = (id, label, caption) => `<button class="practice-mode ${session.mode === id ? 'active' : ''}" type="button" data-practice-mode="${id}"><strong>${label}</strong><small>${caption}</small></button>`;
+  const moduleOptions = session.available_modules.map((module) => `<option value="${esc(module.id)}" ${moduleId === module.id ? 'selected' : ''}>${esc(module.icon)} ${esc(module.title)}</option>`).join('');
+  view.innerHTML = `<section class="practice-wrap"><a class="back-link" href="#/">← К маршруту</a>
+    <article class="practice-hero card"><p class="eyebrow">Практика без прыжков</p><h1>${esc(session.title)}</h1><p class="lead">${esc(session.description)}</p>
+      <div class="practice-modes">
+        ${modeButton('guided', '🌱 Текущий шаг', 'Одна тема, три понятных шага')}
+        ${modeButton('review', '🎯 Ошибки', session.weak_count ? `${session.weak_count} слабых мест` : 'Пока ошибок нет')}
+        ${modeButton('mixed', '🧩 Смешанная', 'Повтор уже открытых тем')}
+      </div>
+      <label class="practice-select"><span>Или выбери тему</span><select id="practice-module"><option value="">Выбрать открытую тему</option>${moduleOptions}</select></label>
+    </article>
+    <aside class="practice-brief"><strong>🧠 Перед началом</strong><p>${esc(session.tip)}</p></aside>
+    <div id="practice-session"></div>
+  </section>`;
+
+  document.querySelectorAll('[data-practice-mode]').forEach((button) => {
+    button.addEventListener('click', () => renderPractice(button.dataset.practiceMode));
   });
+  document.querySelector('#practice-module').addEventListener('change', (event) => {
+    const selected = event.target.value;
+    if (selected) renderPractice('module', selected);
+  });
+
+  const sessionNode = document.querySelector('#practice-session');
+  const renderSummary = () => {
+    const total = session.questions.length;
+    const message = correctCount === total
+      ? 'Отличная серия: все задания решены. Можно переходить к следующему шагу.'
+      : `Верно ${correctCount} из ${total}. Ошибки уже добавлены в режим «Ошибки» — вернись к ним после небольшой паузы.`;
+    sessionNode.innerHTML = `<section class="practice-summary card"><span class="practice-summary-icon">${correctCount === total ? '🏆' : '🔁'}</span><h2>Серия завершена</h2><p>${esc(message)}</p><div class="code-actions"><button class="button" type="button" data-practice-again>Ещё серия <span>→</span></button><a class="button ghost" href="#/">К маршруту</a></div></section>`;
+    sessionNode.querySelector('[data-practice-again]').addEventListener('click', () => renderPractice(mode, moduleId));
+  };
+
+  const renderStep = () => {
+    const question = session.questions[index];
+    const total = session.questions.length;
+    const percent = Math.round((index / total) * 100);
+    sessionNode.innerHTML = `<section class="practice-progress" aria-label="Прогресс серии"><div><strong>Серия: ${index + 1} из ${total}</strong><span>Тема: ${esc(question.lesson_title)}</span></div><div class="practice-progress-track"><i style="width:${percent}%"></i></div></section>
+      <form id="practice-form">${questionTemplate(question, index + 1, `Шаг серии ${index + 1}`)}<div class="submit-row"><button class="button" type="submit">Проверить <span>→</span></button><span class="submit-note">Сначала прочитай план — он не уменьшает ценность ответа.</span></div></form>`;
+    const form = document.querySelector('#practice-form');
+    bindQuestionControls(form);
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      try {
+        const answer = getAnswers(form, [question])[0];
+        const result = await api('/api/practice/submit', { method: 'POST', body: JSON.stringify(answer) });
+        if (result.correct) correctCount += 1;
+        showInline(question.id, result.correct, result.message, result.checks);
+        await refreshDashboard();
+        if (result.correct) toast(`Верно! +${result.xp_gained} XP`);
+        const isLast = index + 1 === total;
+        form.querySelector('.submit-row').innerHTML = `<button class="button ${isLast ? 'blue' : ''}" type="button" data-practice-next>${isLast ? 'Завершить серию' : 'Следующее задание'} <span>→</span></button>`;
+        form.querySelector('[data-practice-next]').addEventListener('click', () => {
+          index += 1;
+          if (index >= total) renderSummary();
+          else renderStep();
+        });
+      } catch (error) {
+        toast(error.message);
+        button.disabled = false;
+      }
+    });
+  };
+
+  renderStep();
 }
 
 async function renderExam(moduleId) {
