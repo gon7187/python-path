@@ -99,9 +99,9 @@ function questionTemplate(question, number) {
   if (question.kind === 'choice') {
     field = `<div class="options">${question.options.map((option) => `<button type="button" class="option" data-choice-q="${question.id}" data-value="${esc(option)}">${esc(option)}</button>`).join('')}</div>`;
   } else if (question.kind === 'input') {
-    field = `<input class="answer-input" data-answer-q="${question.id}" placeholder="${esc(question.placeholder || 'Введите ответ')}" autocomplete="off" />`;
+    field = `<input class="answer-input" data-answer-q="${question.id}" placeholder="${esc(question.placeholder || 'Введите ответ')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />`;
   } else {
-    field = `<textarea class="code-editor" data-answer-q="${question.id}" spellcheck="false">${esc(question.starter)}</textarea>
+    field = `<textarea class="code-editor" data-answer-q="${question.id}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(question.starter)}</textarea>
       <div class="code-actions"><button class="button blue" type="button" data-check-code="${question.id}">▷ Проверить код</button></div>
       <details class="hint"><summary>Нужна подсказка?</summary><p>${esc(question.hint)}</p></details>`;
   }
