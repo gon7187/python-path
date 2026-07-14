@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "httpx>=0.27", "pyright>=1.1", "ruff>=0.12"]
+dev = ["pytest>=8.0", "httpx>=0.27", "pyright>=1.1", "ruff>=0.15.21"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
