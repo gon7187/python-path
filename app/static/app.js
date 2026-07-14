@@ -96,7 +96,8 @@ function renderModule(module) {
 function questionTemplate(question, number, stageLabel = '') {
   const stages = ['Разминка: узнай идею', 'Повтори с опорой', 'Сделай сам, но по плану'];
   const label = stageLabel || stages[number - 1] || `Задание ${number}`;
-  const head = `<div class="question-number">${label}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
+  const badge = question.badge ? `<span class="question-badge">${esc(question.badge)}</span>` : '';
+  const head = `<div class="question-number">${label}${badge}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
   const guide = question.guide
     ? `<aside class="task-guide"><strong>🧭 Как подойти</strong><p>${rich(question.guide)}</p></aside>`
     : '';

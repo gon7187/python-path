@@ -1,4 +1,4 @@
-from app.content import EXAMS, LESSONS, MODULES, QUESTION_BY_ID
+from app.content import EXAMS, LESSONS, MODULES, QUESTION_BY_ID, public_question
 
 
 def test_full_course_has_139_progressive_lessons() -> None:
@@ -31,6 +31,25 @@ def test_extended_lessons_have_full_learning_scaffold() -> None:
         for lesson in extended_lessons
         for question in lesson["questions"]
     )
+
+
+def test_early_lessons_mix_predictions_and_small_traps() -> None:
+    predict_ids = {"warmup-print-choice", "warmup-read-code-choice", "warmup-numbers-choice"}
+    trap_ids = {
+        "warmup-text-choice",
+        "warmup-variables-choice",
+        "warmup-names-choice",
+        "warmup-types-choice",
+        "warmup-length-choice",
+        "warmup-fstring-choice",
+    }
+
+    assert all(
+        QUESTION_BY_ID[question_id]["badge"] == "🔎 Предскажи" for question_id in predict_ids
+    )
+    assert all(QUESTION_BY_ID[question_id]["badge"] == "⚠️ Ловушка" for question_id in trap_ids)
+    assert public_question(QUESTION_BY_ID["warmup-fstring-choice"])["badge"] == "⚠️ Ловушка"
+    assert QUESTION_BY_ID["warmup-variables-code"]["starter"] == "pet = 'кот'\nprint('pet')\n"
 
 
 def test_every_module_has_a_valid_exam() -> None:
