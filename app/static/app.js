@@ -241,7 +241,7 @@ async function renderLesson(id) {
     <aside class="learning-roadmap"><strong>Без спешки</strong><span>1. Прочитай объяснение</span><span>2. Разбери пример</span><span>3. Выполни шаги в задаче</span><p>Не надо держать всё в голове: примеры и подсказки можно открывать во время решения.</p></aside>
     <section>${theoryCards}</section>
     <h2 class="practice-title">Сделаем вместе</h2><p class="lead">У каждой задачи есть план. Код можно проверять сколько угодно раз; для прохождения достаточно 2 правильных ответов.</p>
-    <form id="lesson-form">${lesson.questions.map(questionTemplate).join('')}<div class="submit-row"><button class="button" type="submit">Проверить урок <span>→</span></button><span class="submit-note">Проверяй код отдельно, прежде чем сдавать.</span></div></form>
+    <form id="lesson-form">${lesson.questions.map((question, index) => questionTemplate(question, index + 1)).join('')}<div class="submit-row"><button class="button" type="submit">Проверить урок <span>→</span></button><span class="submit-note">Проверяй код отдельно, прежде чем сдавать.</span></div></form>
   </section>`;
   const form = document.querySelector('#lesson-form');
   bindQuestionControls(form);
@@ -442,7 +442,7 @@ function getCodeInputs(scope, questionId) {
 async function renderExam(moduleId) {
   loading();
   const exam = await api(`/api/exams/${moduleId}`);
-  view.innerHTML = `<section class="exam-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="exam-hero card"><p class="eyebrow">Контрольная точка</p><h1>${esc(exam.title)}</h1><p class="lead">${esc(exam.description)} Для зачёта нужно 70% правильных ответов. Награда — 50 XP.</p></article><form id="exam-form">${exam.questions.map(questionTemplate).join('')}<div class="submit-row"><button class="button blue" type="submit">Сдать экзамен <span>🏁</span></button></div></form></section>`;
+  view.innerHTML = `<section class="exam-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="exam-hero card"><p class="eyebrow">Контрольная точка</p><h1>${esc(exam.title)}</h1><p class="lead">${esc(exam.description)} Для зачёта нужно 70% правильных ответов. Награда — 50 XP.</p></article><form id="exam-form">${exam.questions.map((question, index) => questionTemplate(question, index + 1)).join('')}<div class="submit-row"><button class="button blue" type="submit">Сдать экзамен <span>🏁</span></button></div></form></section>`;
   const form = document.querySelector('#exam-form');
   bindQuestionControls(form);
   form.addEventListener('submit', async (event) => {

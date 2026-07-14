@@ -305,14 +305,11 @@ LESSONS = [
             ),
             code(
                 "if-code",
-                "Напиши `is_adult(age)`, возвращающую True при возрасте 18 и больше.",
-                "def is_adult(age):\n    # твой код\n    pass\n",
-                [
-                    {"kind": "call", "call": "is_adult(18)", "expected": True},
-                    {"kind": "call", "call": "is_adult(17)", "expected": False},
-                ],
-                "Условие внутри функции помогает вернуть нужный логический результат.",
-                "Сравни age с 18 и верни результат сравнения либо используй if/else.",
+                "Измени возраст на 18, чтобы программа вывела `Доступ открыт`.",
+                "age = 17\nif age >= 18:\n    print('Доступ открыт')\nelse:\n    print('Доступ закрыт')\n",
+                [{"kind": "stdout", "expected": "Доступ открыт"}],
+                "Изменив значение age, ты увидел, как условие выбирает другую ветку.",
+                "Сейчас age = 17. Замени только число на 18.",
             ),
         ],
     ),
@@ -352,14 +349,11 @@ LESSONS = [
             text("for-sum", "Чему равна сумма чисел в `range(1, 4)`?", ["6"], "Это 1 + 2 + 3 = 6."),
             code(
                 "for-code",
-                "Напиши `sum_to(number)`, возвращающую сумму от 1 до number включительно.",
-                "def sum_to(number):\n    # твой код\n    pass\n",
-                [
-                    {"kind": "call", "call": "sum_to(1)", "expected": 1},
-                    {"kind": "call", "call": "sum_to(5)", "expected": 15},
-                ],
+                "Измени верхнюю границу, чтобы цикл сложил числа от 1 до 5 и вывел `15`.",
+                "total = 0\nfor number in range(1, 4):\n    total += number\nprint(total)\n",
+                [{"kind": "stdout", "expected": "15"}],
                 "Цикл избавляет от ручного сложения каждого числа.",
-                "Создай total = 0 и пройди range(1, number + 1).",
+                "Верхняя граница range не включается: замени 4 на 6.",
             ),
         ],
     ),
@@ -405,14 +399,11 @@ LESSONS = [
             ),
             code(
                 "while-code",
-                "Напиши `countdown(start)`, возвращающую список от start до 1 через while.",
-                "def countdown(start):\n    # твой код\n    pass\n",
-                [
-                    {"kind": "call", "call": "countdown(1)", "expected": [1]},
-                    {"kind": "call", "call": "countdown(4)", "expected": [4, 3, 2, 1]},
-                ],
+                "Измени стартовое число, чтобы цикл вывел 3, 2, 1.",
+                "count = 1\nwhile count > 0:\n    print(count)\n    count -= 1\n",
+                [{"kind": "stdout", "expected": "3\n2\n1"}],
                 "while хорош, когда счётчик меняется до достижения границы.",
-                "Начни с result = [] и уменьшай start после добавления в список.",
+                "Измени только первую строку: count должен начинаться с 3.",
             ),
         ],
     ),
@@ -458,7 +449,7 @@ LESSONS = [
             code(
                 "func-code",
                 "Напиши `greeting(name)`, возвращающую `Привет, <name>!`.",
-                "def greeting(name):\n    # твой код\n    pass\n",
+                "def greeting(name):\n    # верни приветствие здесь\n    return ''\n",
                 [
                     {"kind": "call", "call": "greeting('Аня')", "expected": "Привет, Аня!"},
                     {"kind": "call", "call": "greeting('Илья')", "expected": "Привет, Илья!"},
@@ -505,7 +496,7 @@ LESSONS = [
             code(
                 "list-code",
                 "Напиши `last_item(items)`, которая возвращает последний элемент списка.",
-                "def last_item(items):\n    # твой код\n    pass\n",
+                "def last_item(items):\n    # верни последний элемент здесь\n    return None\n",
                 [
                     {"kind": "call", "call": "last_item(['a', 'b'])", "expected": "b"},
                     {"kind": "call", "call": "last_item([3, 7, 9])", "expected": 9},
@@ -557,7 +548,7 @@ LESSONS = [
             code(
                 "dict-code",
                 "Напиши `get_level(profile)`: верни level, а если ключа нет — 1.",
-                "def get_level(profile):\n    # твой код\n    pass\n",
+                "def get_level(profile):\n    # верни уровень здесь\n    return 0\n",
                 [
                     {
                         "kind": "call",
@@ -613,7 +604,7 @@ LESSONS = [
             code(
                 "file-code",
                 "Напиши `format_note(title)`, возвращающую `Заметка: <title>`.",
-                "def format_note(title):\n    # твой код\n    pass\n",
+                "def format_note(title):\n    # верни текст заметки здесь\n    return ''\n",
                 [
                     {
                         "kind": "call",
@@ -669,7 +660,7 @@ LESSONS = [
             code(
                 "exception-code",
                 "Напиши `safe_divide(left, right)`. При right = 0 верни `Нельзя делить на ноль`, иначе — частное.",
-                "def safe_divide(left, right):\n    # твой код\n    pass\n",
+                "def safe_divide(left, right):\n    # верни результат здесь\n    return 0\n",
                 [
                     {"kind": "call", "call": "safe_divide(8, 2)", "expected": 4.0},
                     {
@@ -695,7 +686,7 @@ LESSONS = [
             theory(
                 "Класс — чертёж",
                 "Класс описывает общие данные и действия. Объект — конкретный экземпляр этого чертежа.",
-                "class Player:\n    pass\n\nhero = Player()",
+                "class Player:\n    role = 'игрок'\n\nhero = Player()",
             ),
             theory(
                 "__init__ задаёт состояние",
@@ -725,7 +716,7 @@ LESSONS = [
             code(
                 "class-code",
                 "Создай класс `Badge` с методом `label(self, name)`, возвращающим `Награда: <name>`.",
-                "class Badge:\n    def label(self, name):\n        # твой код\n        pass\n",
+                "class Badge:\n    def label(self, name):\n        # верни текст награды здесь\n        return ''\n",
                 [
                     {
                         "kind": "call",

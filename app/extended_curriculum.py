@@ -19,7 +19,7 @@ def _code_task(kind: str) -> dict[str, Any]:
     tasks: dict[str, dict[str, Any]] = {
         "increment": {
             "prompt": "Напиши `increment(value)`, которая возвращает число на 1 больше.",
-            "starter": "def increment(value):\n    # твой код\n    pass\n",
+            "starter": "def increment(value):\n    # верни результат здесь\n    return 0\n",
             "tests": [
                 {"kind": "call", "call": "increment(0)", "expected": 1},
                 {"kind": "call", "call": "increment(9)", "expected": 10},
@@ -28,7 +28,7 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "discount": {
             "prompt": "Напиши `discount(price)`, которая возвращает цену со скидкой 10%.",
-            "starter": "def discount(price):\n    # твой код\n    pass\n",
+            "starter": "def discount(price):\n    # верни результат здесь\n    return 0\n",
             "tests": [
                 {"kind": "call", "call": "discount(100)", "expected": 90.0},
                 {"kind": "call", "call": "discount(50)", "expected": 45.0},
@@ -37,19 +37,19 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "normalize": {
             "prompt": "Напиши `normalize(text)`, которая убирает пробелы по краям и приводит текст к нижнему регистру.",
-            "starter": "def normalize(text):\n    # твой код\n    pass\n",
+            "starter": "def normalize(text):\n    # верни результат здесь\n    return ''\n",
             "tests": [{"kind": "call", "call": "normalize('  PyThOn  ')", "expected": "python"}],
             "hint": "Соедини методы strip() и lower().",
         },
         "reverse": {
             "prompt": "Напиши `reverse_text(text)`, которая возвращает строку в обратном порядке.",
-            "starter": "def reverse_text(text):\n    # твой код\n    pass\n",
+            "starter": "def reverse_text(text):\n    # верни результат здесь\n    return ''\n",
             "tests": [{"kind": "call", "call": "reverse_text('код')", "expected": "док"}],
             "hint": "Срез с шагом -1 разворачивает последовательность.",
         },
         "even": {
             "prompt": "Напиши `is_even(number)`, которая возвращает True только для чётных чисел.",
-            "starter": "def is_even(number):\n    # твой код\n    pass\n",
+            "starter": "def is_even(number):\n    # верни результат здесь\n    return False\n",
             "tests": [
                 {"kind": "call", "call": "is_even(8)", "expected": True},
                 {"kind": "call", "call": "is_even(7)", "expected": False},
@@ -58,7 +58,7 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "clamp": {
             "prompt": "Напиши `clamp(value)`: верни число, ограниченное диапазоном от 0 до 100.",
-            "starter": "def clamp(value):\n    # твой код\n    pass\n",
+            "starter": "def clamp(value):\n    # верни результат здесь\n    return 0\n",
             "tests": [
                 {"kind": "call", "call": "clamp(-3)", "expected": 0},
                 {"kind": "call", "call": "clamp(53)", "expected": 53},
@@ -68,7 +68,7 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "sum_items": {
             "prompt": "Напиши `sum_items(items)`, которая возвращает сумму чисел списка.",
-            "starter": "def sum_items(items):\n    # твой код\n    pass\n",
+            "starter": "def sum_items(items):\n    # верни результат здесь\n    return 0\n",
             "tests": [
                 {"kind": "call", "call": "sum_items([1, 2, 3])", "expected": 6},
                 {"kind": "call", "call": "sum_items([])", "expected": 0},
@@ -77,13 +77,13 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "count_positive": {
             "prompt": "Напиши `count_positive(items)`, которая считает положительные числа в списке.",
-            "starter": "def count_positive(items):\n    # твой код\n    pass\n",
+            "starter": "def count_positive(items):\n    # верни результат здесь\n    return 0\n",
             "tests": [{"kind": "call", "call": "count_positive([-1, 0, 4, 8])", "expected": 2}],
             "hint": "Заведи счётчик и увеличивай его, если value > 0.",
         },
         "last": {
             "prompt": "Напиши `last_or_none(items)`: верни последний элемент или None для пустого списка.",
-            "starter": "def last_or_none(items):\n    # твой код\n    pass\n",
+            "starter": "def last_or_none(items):\n    # верни результат здесь\n    return None\n",
             "tests": [
                 {"kind": "call", "call": "last_or_none(['a', 'b'])", "expected": "b"},
                 {"kind": "call", "call": "last_or_none([])", "expected": None},
@@ -92,13 +92,13 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "unique": {
             "prompt": "Напиши `unique_count(items)`, которая возвращает количество уникальных значений.",
-            "starter": "def unique_count(items):\n    # твой код\n    pass\n",
+            "starter": "def unique_count(items):\n    # верни результат здесь\n    return 0\n",
             "tests": [{"kind": "call", "call": "unique_count([1, 1, 2, 3, 3])", "expected": 3}],
             "hint": "Множество set убирает дубликаты.",
         },
         "lookup": {
             "prompt": "Напиши `get_title(record)`: верни поле title или строку `Без названия`, если ключа нет.",
-            "starter": "def get_title(record):\n    # твой код\n    pass\n",
+            "starter": "def get_title(record):\n    # верни результат здесь\n    return ''\n",
             "tests": [
                 {"kind": "call", "call": "get_title({'title': 'Python'})", "expected": "Python"},
                 {"kind": "call", "call": "get_title({})", "expected": "Без названия"},
@@ -107,7 +107,7 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "label": {
             "prompt": "Напиши `make_label(name, level)`, возвращающую строку `<name> · уровень <level>`.",
-            "starter": "def make_label(name, level):\n    # твой код\n    pass\n",
+            "starter": "def make_label(name, level):\n    # верни результат здесь\n    return ''\n",
             "tests": [
                 {"kind": "call", "call": "make_label('Аня', 2)", "expected": "Аня · уровень 2"}
             ],
@@ -115,7 +115,7 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "divide": {
             "prompt": "Напиши `safe_divide(left, right)`: при делении на ноль верни None, иначе — частное.",
-            "starter": "def safe_divide(left, right):\n    # твой код\n    pass\n",
+            "starter": "def safe_divide(left, right):\n    # верни результат здесь\n    return None\n",
             "tests": [
                 {"kind": "call", "call": "safe_divide(8, 2)", "expected": 4.0},
                 {"kind": "call", "call": "safe_divide(8, 0)", "expected": None},
@@ -124,13 +124,13 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "pair": {
             "prompt": "Напиши `pair_sum(pair)`, которая возвращает сумму двух элементов кортежа.",
-            "starter": "def pair_sum(pair):\n    # твой код\n    pass\n",
+            "starter": "def pair_sum(pair):\n    # верни результат здесь\n    return 0\n",
             "tests": [{"kind": "call", "call": "pair_sum((3, 5))", "expected": 8}],
             "hint": "Обратись к индексам 0 и 1 или распакуй кортеж.",
         },
         "tag": {
             "prompt": "Напиши `tag(value)`, которая возвращает словарь `{'value': value, 'ready': True}`.",
-            "starter": "def tag(value):\n    # твой код\n    pass\n",
+            "starter": "def tag(value):\n    # верни результат здесь\n    return {}\n",
             "tests": [
                 {
                     "kind": "call",
@@ -142,7 +142,7 @@ def _code_task(kind: str) -> dict[str, Any]:
         },
         "badge": {
             "prompt": "Создай класс Badge с методом label(self, name), возвращающим `Награда: <name>`.",
-            "starter": "class Badge:\n    def label(self, name):\n        # твой код\n        pass\n",
+            "starter": "class Badge:\n    def label(self, name):\n        # верни текст награды здесь\n        return ''\n",
             "tests": [
                 {
                     "kind": "call",

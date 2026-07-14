@@ -52,6 +52,23 @@ def test_early_lessons_mix_predictions_and_small_traps() -> None:
     assert QUESTION_BY_ID["warmup-variables-code"]["starter"] == "pet = 'кот'\nprint('pet')\n"
 
 
+def test_tasks_only_use_syntax_already_explained() -> None:
+    function_lesson_index = next(
+        index for index, lesson in enumerate(LESSONS) if lesson["id"] == "functions"
+    )
+    early_starters = [
+        question.get("starter", "")
+        for lesson in LESSONS[:function_lesson_index]
+        for question in lesson["questions"]
+    ]
+    all_starters = [
+        question.get("starter", "") for lesson in LESSONS for question in lesson["questions"]
+    ]
+
+    assert all("def " not in starter for starter in early_starters)
+    assert all("pass" not in starter for starter in all_starters)
+
+
 def test_every_module_has_a_valid_exam() -> None:
     assert set(EXAMS) == {module["id"] for module in MODULES}
     for exam in EXAMS.values():
