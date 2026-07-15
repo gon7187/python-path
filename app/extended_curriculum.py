@@ -10,8 +10,21 @@ from __future__ import annotations
 from typing import Any
 
 
-def _theory(title: str, text: str, example: str, tip: str = "") -> dict[str, str]:
-    return {"title": title, "text": text, "example": example, "tip": tip}
+def _theory(
+    title: str,
+    text: str,
+    example: str,
+    tip: str = "",
+    language: str = "python",
+) -> dict[str, str]:
+    """Собрать карточку теории и явно пометить язык примера."""
+    return {
+        "title": title,
+        "text": text,
+        "example": example,
+        "tip": tip,
+        "language": language,
+    }
 
 
 def _code_task(kind: str) -> dict[str, Any]:
@@ -38,13 +51,19 @@ def _code_task(kind: str) -> dict[str, Any]:
         "normalize": {
             "prompt": "Напиши `normalize(text)`, которая убирает пробелы по краям и приводит текст к нижнему регистру.",
             "starter": "def normalize(text):\n    # верни результат здесь\n    return ''\n",
-            "tests": [{"kind": "call", "call": "normalize('  PyThOn  ')", "expected": "python"}],
+            "tests": [
+                {"kind": "call", "call": "normalize('  PyThOn  ')", "expected": "python"},
+                {"kind": "call", "call": "normalize(' УЖЕ ')", "expected": "уже"},
+            ],
             "hint": "Соедини методы strip() и lower().",
         },
         "reverse": {
             "prompt": "Напиши `reverse_text(text)`, которая возвращает строку в обратном порядке.",
             "starter": "def reverse_text(text):\n    # верни результат здесь\n    return ''\n",
-            "tests": [{"kind": "call", "call": "reverse_text('код')", "expected": "док"}],
+            "tests": [
+                {"kind": "call", "call": "reverse_text('код')", "expected": "док"},
+                {"kind": "call", "call": "reverse_text('a')", "expected": "a"},
+            ],
             "hint": "Срез с шагом -1 разворачивает последовательность.",
         },
         "even": {
@@ -64,7 +83,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "clamp(53)", "expected": 53},
                 {"kind": "call", "call": "clamp(120)", "expected": 100},
             ],
-            "hint": "Вспомни min() и max().",
+            "hint": "Сначала проверь значение ниже 0, затем значение выше 100; в остальных случаях верни само value.",
         },
         "sum_items": {
             "prompt": "Напиши `sum_items(items)`, которая возвращает сумму чисел списка.",
@@ -78,7 +97,10 @@ def _code_task(kind: str) -> dict[str, Any]:
         "count_positive": {
             "prompt": "Напиши `count_positive(items)`, которая считает положительные числа в списке.",
             "starter": "def count_positive(items):\n    # верни результат здесь\n    return 0\n",
-            "tests": [{"kind": "call", "call": "count_positive([-1, 0, 4, 8])", "expected": 2}],
+            "tests": [
+                {"kind": "call", "call": "count_positive([-1, 0, 4, 8])", "expected": 2},
+                {"kind": "call", "call": "count_positive([-3, 0])", "expected": 0},
+            ],
             "hint": "Заведи счётчик и увеличивай его, если value > 0.",
         },
         "last": {
@@ -93,7 +115,10 @@ def _code_task(kind: str) -> dict[str, Any]:
         "unique": {
             "prompt": "Напиши `unique_count(items)`, которая возвращает количество уникальных значений.",
             "starter": "def unique_count(items):\n    # верни результат здесь\n    return 0\n",
-            "tests": [{"kind": "call", "call": "unique_count([1, 1, 2, 3, 3])", "expected": 3}],
+            "tests": [
+                {"kind": "call", "call": "unique_count([1, 1, 2, 3, 3])", "expected": 3},
+                {"kind": "call", "call": "unique_count([])", "expected": 0},
+            ],
             "hint": "Множество set убирает дубликаты.",
         },
         "lookup": {
@@ -109,7 +134,8 @@ def _code_task(kind: str) -> dict[str, Any]:
             "prompt": "Напиши `make_label(name, level)`, возвращающую строку `<name> · уровень <level>`.",
             "starter": "def make_label(name, level):\n    # верни результат здесь\n    return ''\n",
             "tests": [
-                {"kind": "call", "call": "make_label('Аня', 2)", "expected": "Аня · уровень 2"}
+                {"kind": "call", "call": "make_label('Аня', 2)", "expected": "Аня · уровень 2"},
+                {"kind": "call", "call": "make_label('Лев', 5)", "expected": "Лев · уровень 5"},
             ],
             "hint": "f-строка поможет собрать текст.",
         },
@@ -125,7 +151,10 @@ def _code_task(kind: str) -> dict[str, Any]:
         "pair": {
             "prompt": "Напиши `pair_sum(pair)`, которая возвращает сумму двух элементов кортежа.",
             "starter": "def pair_sum(pair):\n    # верни результат здесь\n    return 0\n",
-            "tests": [{"kind": "call", "call": "pair_sum((3, 5))", "expected": 8}],
+            "tests": [
+                {"kind": "call", "call": "pair_sum((3, 5))", "expected": 8},
+                {"kind": "call", "call": "pair_sum((-2, 2))", "expected": 0},
+            ],
             "hint": "Обратись к индексам 0 и 1 или распакуй кортеж.",
         },
         "tag": {
@@ -136,7 +165,12 @@ def _code_task(kind: str) -> dict[str, Any]:
                     "kind": "call",
                     "call": "tag('данные')",
                     "expected": {"value": "данные", "ready": True},
-                }
+                },
+                {
+                    "kind": "call",
+                    "call": "tag(0)",
+                    "expected": {"value": 0, "ready": True},
+                },
             ],
             "hint": "Создай словарь с двумя парами ключ — значение.",
         },
@@ -148,7 +182,12 @@ def _code_task(kind: str) -> dict[str, Any]:
                     "kind": "call",
                     "call": "Badge().label('Чистый код')",
                     "expected": "Награда: Чистый код",
-                }
+                },
+                {
+                    "kind": "call",
+                    "call": "Badge().label('Старт')",
+                    "expected": "Награда: Старт",
+                },
             ],
             "hint": "Метод должен вернуть f-строку; self уже передан первым параметром.",
         },
@@ -1185,7 +1224,7 @@ COURSE_UNITS = [
                 "Реляционная модель",
                 "Таблицы, строки и первичные ключи",
                 "первичный ключ",
-                "tasks(id, title, done)",
+                "Таблица tasks: id, title, done",
                 "Таблица хранит однотипные записи, а первичный ключ однозначно отличает каждую строку.",
                 "Не дублируй одни и те же факты в нескольких таблицах без причины.",
             ),
@@ -1353,75 +1392,266 @@ COURSE_UNITS = [
 ]
 
 
-TASK_CYCLES = [
-    ["increment", "discount", "even", "clamp"],
-    ["normalize", "normalize", "label", "label"],
-    ["pair", "pair", "reverse", "label"],
-    ["sum_items", "sum_items", "last", "count_positive"],
-    ["lookup", "lookup", "tag", "unique"],
-    ["clamp", "even", "count_positive", "last"],
-    ["label", "label", "tag", "lookup"],
-    ["label", "last", "increment", "label"],
-    ["sum_items", "count_positive", "tag", "pair"],
-    ["last", "increment", "count_positive", "sum_items"],
-    ["label", "label", "tag", "lookup"],
-    ["label", "label", "tag", "lookup"],
-    ["divide", "clamp", "divide", "label"],
-    ["badge", "label", "lookup", "tag"],
-    ["badge", "clamp", "label", "sum_items"],
-    ["label", "last", "tag", "badge"],
-    ["increment", "label", "sum_items", "discount"],
-    ["unique", "pair", "increment", "last"],
-    ["normalize", "label", "even", "normalize"],
-    ["sum_items", "tag", "count_positive", "label"],
-    ["label", "increment", "label", "tag"],
-    ["label", "lookup", "increment", "tag"],
-    ["lookup", "tag", "even", "last"],
-    ["tag", "lookup", "label", "divide"],
-    ["increment", "sum_items", "clamp", "count_positive"],
-    ["increment", "label", "sum_items", "clamp"],
-    ["badge", "tag", "lookup", "label"],
-]
+TASK_ORDER = (
+    "increment",
+    "discount",
+    "normalize",
+    "reverse",
+    "even",
+    "clamp",
+    "sum_items",
+    "count_positive",
+    "last",
+    "unique",
+    "lookup",
+    "label",
+    "divide",
+    "pair",
+    "tag",
+    "badge",
+)
+
+# A cumulative task becomes eligible only after the tool it needs was taught.
+# Tasks without an entry rely solely on the completed foundation path.
+TASK_REQUIREMENT_LESSON = {
+    "even": "operators-integer-division",
+    "reverse": "strings-pro-indexes",
+    "pair": "tuples-slices-tuples",
+    "last": "lists-pro-stacks-queues",
+    "badge": "oop-design-init",
+}
+
+# Это не новые темы расширенного урока, а уже знакомые основы, которые он
+# возвращает в память. За 108 уроков каждая из 16 задач встречается 6–7 раз.
+TASK_CONCEPTS = {
+    "increment": ["функция", "return", "арифметика"],
+    "discount": ["функция", "return", "умножение"],
+    "normalize": ["функция", "строковые методы"],
+    "reverse": ["функция", "срез строки"],
+    "even": ["функция", "сравнение", "остаток от деления"],
+    "clamp": ["функция", "ветвление", "границы"],
+    "sum_items": ["функция", "список", "сумма"],
+    "count_positive": ["функция", "цикл", "условие"],
+    "last": ["функция", "список", "условие"],
+    "unique": ["функция", "множество"],
+    "lookup": ["функция", "словарь", "get"],
+    "label": ["функция", "параметры", "f-строка"],
+    "divide": ["функция", "ветвление", "деление"],
+    "pair": ["функция", "кортеж", "индекс"],
+    "tag": ["функция", "словарь", "булево значение"],
+    "badge": ["класс", "метод", "f-строка"],
+}
+
+FOUNDATION_DISTRACTORS = (
+    "print('Готово')",
+    "name = 'Аня'\nprint(f'Привет, {name}!')",
+    "values = [2, 4]\nprint(sum(values))",
+    "if score >= 3:\n    print('Уровень пройден')",
+    "for number in range(3):\n    print(number)",
+    "def double(number):\n    return number * 2",
+    "profile = {'name': 'Лев'}\nprint(profile.get('name'))",
+    "words = 'учу Python'.split()\nprint(len(words))",
+)
+
+
+NON_PYTHON_EXAMPLES = {
+    ("modules", "packages"): "text",
+    ("files-data", "csv"): "csv",
+    ("quality", "format-lint"): "shell",
+    ("quality", "git"): "shell",
+    ("cli-environment", "argv"): "shell",
+    ("cli-environment", "environment"): "dotenv",
+    ("cli-environment", "venv"): "shell",
+    ("cli-environment", "pyproject"): "toml",
+    ("http-api", "request-response"): "http",
+    ("http-api", "json-api"): "json",
+    ("http-api", "status-codes"): "http",
+    ("http-api", "pagination"): "http",
+    ("databases", "relational"): "sql",
+    ("databases", "crud"): "sql",
+    ("databases", "transactions"): "sql",
+    ("capstones", "notes-app"): "text",
+    ("capstones", "api-client"): "http",
+    ("capstones", "release"): "text",
+}
+
+
+def _example_language(module_id: str, slug: str) -> str:
+    return NON_PYTHON_EXAMPLES.get((module_id, slug), "python")
+
+
+def _parsons_data(lesson_id: str, example: str) -> tuple[str, list[dict[str, str]], list[str]]:
+    """Превратить пример в маленькую задачу на восстановление порядка."""
+    example_lines = example.splitlines()
+    if len(example_lines) > 1:
+        prompt = "Собери строки примера в правильном порядке. Отступы уже сохранены."
+        ordered_lines = example_lines
+    else:
+        prompt = "Расположи шаги разбора примера в безопасном порядке."
+        ordered_lines = [
+            "Определи, какие входные значения нужны строке.",
+            example,
+            "Предскажи значение результата до проверки.",
+            "Измени одно входное значение и проверь новый прогноз.",
+        ]
+
+    ordered_blocks = [
+        {"id": f"{lesson_id}-block-{index}", "text": line}
+        for index, line in enumerate(ordered_lines, start=1)
+    ]
+    # Не используем random: одинаковый урок всегда должен открываться одинаково.
+    scrambled_blocks = ordered_blocks[1::2] + ordered_blocks[::2]
+    if [block["id"] for block in scrambled_blocks] == [block["id"] for block in ordered_blocks]:
+        scrambled_blocks = list(reversed(ordered_blocks))
+    answer = [block["id"] for block in ordered_blocks]
+    return prompt, scrambled_blocks, answer
+
+
+def _lesson_theory(
+    module_id: str,
+    spec: tuple[str, str, str, str, str, str, str],
+) -> list[dict[str, str]]:
+    slug, title, subtitle, keyword, example, concept, advice = spec
+    language = _example_language(module_id, slug)
+    return [
+        _theory(
+            "Одна новая идея",
+            concept,
+            example,
+            f"Сейчас достаточно понять один ориентир: {keyword}.",
+            language,
+        ),
+        _theory(
+            "Сначала предскажи",
+            (
+                "Не запускай пример автоматически. Сначала скажи своими словами, что должно "
+                "получиться, и только затем сверяй прогноз. Ошибка в прогнозе — полезная подсказка, "
+                "какую часть идеи нужно перечитать."
+            ),
+            "Что получится? Что изменится, если заменить одно исходное значение?",
+            "Прогноз заставляет вспомнить правило, а не просто узнать знакомый код.",
+            "text",
+        ),
+        _theory(
+            "Пройди трассировку",
+            (
+                f"Для темы «{title}» двигайся по одному действию: найди входные данные, "
+                "примени изучаемое правило, запиши промежуточное значение и только потом переходи дальше."
+            ),
+            "входные данные → одно действие → промежуточный результат → итог",
+            "Если строк несколько, не пытайся удержать в голове их все одновременно.",
+            "text",
+        ),
+        _theory(
+            "Ловушка урока",
+            (
+                f"Частая ошибка — увидеть знакомые слова и выбрать решение по внешнему виду. "
+                f"Проверь смысл операции. Практический ориентир: {advice}"
+            ),
+            f"Ловушка: {advice}",
+            "Объясни, почему ошибочный вариант не подходит, прежде чем смотреть ответ.",
+            "text",
+        ),
+        _theory(
+            "Перенеси идею в задачу",
+            (
+                f"{subtitle}. Придумай собственный пример из двух-трёх строк: другие данные, "
+                "то же правило. После этого собери тематический пример из блоков, а в редакторе "
+                "вернись к одной из ранее изученных основ."
+            ),
+            "Свой пример: другие данные → то же правило → проверяемый результат",
+            "Перенос на новые данные показывает понимание лучше, чем дословное повторение.",
+            "text",
+        ),
+    ]
 
 
 def _make_questions(
-    lesson_id: str, lesson_spec: tuple[str, str, str, str, str, str, str], task_kind: str
+    lesson_id: str,
+    module_id: str,
+    lesson_spec: tuple[str, str, str, str, str, str, str],
+    task_kind: str,
 ) -> list[dict[str, Any]]:
-    _, title, subtitle, keyword, example, concept, advice = lesson_spec
+    slug, title, subtitle, keyword, example, concept, _ = lesson_spec
     code_task = _code_task(task_kind)
+    parsons_prompt, parsons_blocks, parsons_answer = _parsons_data(lesson_id, example)
+    topical_concepts = [keyword]
+    review_concepts = TASK_CONCEPTS[task_kind]
+    distractor_start = sum(ord(symbol) for symbol in lesson_id) % len(FOUNDATION_DISTRACTORS)
+    distractors = [
+        FOUNDATION_DISTRACTORS[(distractor_start + offset) % len(FOUNDATION_DISTRACTORS)]
+        for offset in range(3)
+    ]
+    options = [example, *(item for item in distractors if item != example)][:4]
     return [
         {
             "id": f"{lesson_id}-choice",
             "kind": "choice",
             "prompt": f"Какой пример относится к теме «{title}»?",
-            "options": [example, "print('Сначала пишем код, потом думаем')", "value = input() + 1"],
+            "options": options,
             "answer": example,
             "explanation": concept,
             "guide": (
-                f"1. Вернись к примеру `{example}`. 2. Найди в нём действие, связанное с «{keyword}». "
-                "3. Выбери вариант с такой же формой, а не просто знакомыми словами."
+                "Сначала назови действие из заголовка своими словами. Затем сравни варианты по "
+                "операции, а не по знакомым именам переменных. Отвлекающие варианты используют "
+                "только уже знакомые базовые конструкции."
             ),
+            "purpose": "recognition",
+            "focus_concepts": topical_concepts,
+            "review_concepts": [],
+            "mandatory": False,
         },
         {
             "id": f"{lesson_id}-term",
             "kind": "input",
             "prompt": f"Какой ключевой инструмент или термин связывает урок «{title}»?",
             "answers": [keyword],
-            "placeholder": "Например: словарь",
+            "placeholder": "Ответь коротким термином",
             "explanation": f"Ключевой ориентир урока — «{keyword}». {subtitle}.",
             "guide": (
-                f"Нужен не длинный ответ, а ориентир урока. Прочитай заголовок и пример: "
-                f"они ведут к термину «{keyword}»."
+                "Нужен короткий термин, а не определение. Спрячь теорию, вспомни действие из "
+                "примера и назови инструмент, который это действие выполняет. Если не получилось, "
+                "вернись к первой карточке и попробуй снова."
             ),
+            "purpose": "free_recall",
+            "focus_concepts": topical_concepts,
+            "review_concepts": [],
+            "mandatory": False,
+        },
+        {
+            "id": f"{lesson_id}-parsons",
+            "kind": "parsons",
+            "prompt": parsons_prompt,
+            "blocks": parsons_blocks,
+            "answer": parsons_answer,
+            "explanation": (
+                f"Порядок восстановлен: теперь проследи, где в примере работает «{keyword}», "
+                "и предскажи результат до запуска."
+            ),
+            "guide": (
+                "Найди строку, которой нужны уже подготовленные данные. Она не может стоять раньше "
+                "их появления. Для вложенного кода дополнительно смотри на сохранённые отступы."
+            ),
+            "language": _example_language(module_id, slug),
+            "purpose": "ordering_and_tracing",
+            "focus_concepts": topical_concepts,
+            "review_concepts": [],
+            "mandatory": True,
         },
         {
             "id": f"{lesson_id}-code",
             "kind": "code",
             **code_task,
+            "prompt": f"🔁 Накопительное повторение. {code_task['prompt']}",
             "guide": (
-                f"Тема этого урока — «{title}». 1. Не стирай заготовку. 2. Сначала добейся "
-                f"самого простого результата. 3. {code_task['hint']} 4. Нажми «Проверить код» и меняй по одному шагу."
+                "Это отдельное повторение уже изученных основ, а не проверка новой темы урока. "
+                "Назови вход и ожидаемый выход, измени минимальную часть заготовки и сначала "
+                "проверь один простой случай. Подсказку открывай только после собственной попытки."
             ),
+            "purpose": "spaced_retrieval",
+            "focus_concepts": review_concepts,
+            "review_concepts": review_concepts,
+            "mandatory": True,
         },
     ]
 
@@ -1434,6 +1664,11 @@ def build_extended_course() -> tuple[
     exams: dict[str, dict[str, Any]] = {}
     colors = ["sky", "violet", "sun", "mint"]
     order = 13
+    lesson_number = 0
+    previous_lesson_id: str | None = None
+    completed_extended_lessons: set[str] = set()
+    task_counts = {task_kind: 0 for task_kind in TASK_ORDER}
+    last_task_kind: str | None = None
     for unit_index, unit in enumerate(COURSE_UNITS):
         module_id = unit["id"]
         modules.append(
@@ -1445,11 +1680,27 @@ def build_extended_course() -> tuple[
                 "icon": unit["icon"],
             }
         )
-        question_ids: list[str] = []
+        unit_questions: list[list[dict[str, Any]]] = []
         for lesson_index, spec in enumerate(unit["lessons"]):
             slug, title, subtitle, keyword, example, concept, advice = spec
             lesson_id = f"{module_id}-{slug}"
-            questions = _make_questions(lesson_id, spec, TASK_CYCLES[unit_index][lesson_index])
+            eligible_tasks = [
+                task_kind
+                for task_kind in TASK_ORDER
+                if TASK_REQUIREMENT_LESSON.get(task_kind) in (None, *completed_extended_lessons)
+            ]
+            if len(eligible_tasks) > 1 and last_task_kind in eligible_tasks:
+                eligible_tasks.remove(last_task_kind)
+            task_kind = min(
+                eligible_tasks,
+                key=lambda item: (task_counts[item], TASK_ORDER.index(item)),
+            )
+            questions = _make_questions(
+                lesson_id,
+                module_id,
+                spec,
+                task_kind,
+            )
             lessons.append(
                 {
                     "id": lesson_id,
@@ -1459,60 +1710,41 @@ def build_extended_course() -> tuple[
                     "subtitle": subtitle,
                     "duration": 14 + lesson_index,
                     "xp": 35 + (unit_index // 4) * 5,
-                    "theory": [
-                        _theory(
-                            "Сначала идея простыми словами",
-                            concept,
-                            example,
-                            f"Главный ориентир урока: {keyword}.",
-                        ),
-                        _theory(
-                            "Разбираем пример, а не запоминаем его целиком",
-                            (
-                                f"Прочитай пример слева направо. Найди в нём «{keyword}», затем назови, "
-                                "какое значение получается после выполнения строки. Попробуй изменить только одну часть и "
-                                "предсказать, что поменяется."
-                            ),
-                            example,
-                            "Не нужно писать пример по памяти: сначала пойми, что делает каждая его часть.",
-                        ),
-                        _theory(
-                            "Где это пригодится",
-                            (
-                                f"{subtitle}. Этот инструмент редко существует сам по себе: он помогает сделать программу "
-                                "понятнее, безопаснее или короче в реальном проекте."
-                            ),
-                            example,
-                            advice,
-                        ),
-                        _theory(
-                            "Микро-шаг перед редактором",
-                            (
-                                "Прежде чем писать код, ответь себе на три вопроса: что приходит на вход, что должно "
-                                "получиться на выходе и какое одно действие связывает их. Затем повтори только это действие."
-                            ),
-                            f"# Тема: {title}\n# Ключевой термин: {keyword}\n# Совет: {advice}",
-                            "Если термин пока не вспоминается, возвращайся к примеру — это часть обучения, а не подсматривание.",
-                        ),
-                        _theory(
-                            "Проверка понимания без экзамена",
-                            (
-                                f"Закончи фразу: «{keyword} нужен, когда ...». Сформулируй ответ своими словами, "
-                                "а потом выполни задания с опорой на этот вывод."
-                            ),
-                            f"# Тема: {title}\n# Ключевой термин: {keyword}",
-                            "Своё объяснение запоминается лучше готового определения.",
-                        ),
-                    ],
+                    "concepts": [keyword],
+                    "prerequisites": [previous_lesson_id] if previous_lesson_id else [],
+                    "practices": TASK_CONCEPTS[task_kind],
+                    "difficulty": 2 + min(3, unit_index // 7),
+                    "theory": _lesson_theory(module_id, spec),
                     "questions": questions,
                 }
             )
-            question_ids.append(questions[0]["id"])
+            unit_questions.append(questions)
+            previous_lesson_id = lesson_id
+            completed_extended_lessons.add(lesson_id)
+            task_counts[task_kind] += 1
+            last_task_kind = task_kind
+            lesson_number += 1
             order += 1
+        question_ids = [
+            unit_questions[0][0]["id"],
+            unit_questions[0][2]["id"],
+            unit_questions[1][0]["id"],
+            unit_questions[1][3]["id"],
+            unit_questions[2][2]["id"],
+            unit_questions[3][3]["id"],
+        ]
+        mandatory_question_ids = [
+            unit_questions[2][2]["id"],
+            unit_questions[3][3]["id"],
+        ]
         exams[module_id] = {
             "title": f"Контрольная точка: {unit['title']}",
-            "description": f"Четыре коротких вопроса по разделу «{unit['title']}».",
+            "description": (
+                f"Шесть смешанных заданий по разделу «{unit['title']}»: распознавание, "
+                "восстановление порядка и накопительное написание кода."
+            ),
             "question_ids": question_ids,
+            "mandatory_question_ids": mandatory_question_ids,
         }
     return modules, lessons, exams
 

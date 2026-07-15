@@ -134,8 +134,13 @@ function renderModule(module) {
 }
 
 function questionTemplate(question, number, stageLabel = '') {
-  const stages = ['Разминка: узнай идею', 'Повтори с опорой', 'Сделай сам, но по плану'];
-  const label = stageLabel || stages[number - 1] || `Задание ${number}`;
+  const stages = {
+    choice: 'Проверь понимание',
+    input: 'Вспомни без вариантов',
+    parsons: 'Собери и проследи код',
+    code: ['spaced_retrieval', 'cumulative_transfer'].includes(question.purpose) ? 'Накопительное повторение' : 'Примени самостоятельно',
+  };
+  const label = stageLabel || stages[question.kind] || `Задание ${number}`;
   const badge = question.badge ? `<span class="question-badge">${esc(question.badge)}</span>` : '';
   const head = `<div class="question-number">${label}${badge}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
   const guide = question.guide
@@ -146,12 +151,14 @@ function questionTemplate(question, number, stageLabel = '') {
     field = `<div class="options">${question.options.map((option) => `<button type="button" class="option" data-choice-q="${question.id}" data-value="${esc(option)}">${esc(option)}</button>`).join('')}</div>`;
   } else if (question.kind === 'input') {
     field = `<input class="answer-input" data-answer-q="${question.id}" placeholder="${esc(question.placeholder || 'Введите ответ')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />`;
+  } else if (question.kind === 'parsons') {
+    field = `<div class="parsons-help">Перемещай строки стрелками. На телефоне это надёжнее перетаскивания.</div><div class="parsons-list" data-parsons-q="${question.id}">${question.blocks.map((block, index) => `<div class="parsons-block" data-parsons-block="${esc(block.id)}"><span class="parsons-grip">${index + 1}</span><pre>${esc(block.text || ' ')}</pre><div class="parsons-actions"><button type="button" aria-label="Поднять строку" data-parsons-move="up">↑</button><button type="button" aria-label="Опустить строку" data-parsons-move="down">↓</button></div></div>`).join('')}</div>`;
   } else {
     const exampleInputs = (question.input_example || []).join('\n');
     field = `<textarea class="code-editor" data-answer-q="${question.id}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(question.starter)}</textarea>
       <details class="code-input-panel" ${exampleInputs ? 'open' : ''}><summary>⌨️ Данные для input() <small>необязательно</small></summary><p>Одна строка — один ответ. Они подставятся по порядку при запуске.</p><textarea class="code-stdin" data-input-q="${question.id}" placeholder="Например: Аня" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">${esc(exampleInputs)}</textarea></details>
       <div class="code-actions"><button class="button ghost" type="button" data-run-code="${question.id}">▷ Запустить</button><button class="button blue" type="button" data-check-code="${question.id}">✓ Проверить по заданию</button><a class="button ghost sandbox-link" href="#/sandbox">⌨️ Песочница</a></div>
-      <details class="hint"><summary>Нужна подсказка?</summary><p>${esc(question.hint)}</p></details>`;
+      <div class="progressive-hints">${(question.hints || [question.hint]).filter(Boolean).map((hint, index) => `<details class="hint"><summary>Подсказка ${index + 1}${index === 0 ? ' · направление' : index === 1 ? ' · план' : ' · почти решение'}</summary><p>${esc(hint)}</p></details>`).join('')}</div>`;
   }
   return `<article class="question-card card" data-question="${question.id}">${head}${guide}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
 }
@@ -160,6 +167,7 @@ function getAnswers(scope, questions) {
   return questions.map((question) => {
     let answer = '';
     if (question.kind === 'choice') answer = scope.querySelector(`[data-choice-q="${question.id}"].selected`)?.dataset.value || '';
+    else if (question.kind === 'parsons') answer = JSON.stringify([...scope.querySelectorAll(`[data-parsons-q="${question.id}"] [data-parsons-block]`)].map((item) => item.dataset.parsonsBlock));
     else answer = scope.querySelector(`[data-answer-q="${question.id}"]`)?.value || '';
     return { question_id: question.id, answer };
   });
@@ -185,6 +193,17 @@ function bindQuestionControls(scope) {
       } catch (error) { showInline(questionId, false, error.message); }
       button.disabled = false;
       button.textContent = '✓ Проверить по заданию';
+    });
+  });
+  scope.querySelectorAll('[data-parsons-move]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const block = button.closest('[data-parsons-block]');
+      if (button.dataset.parsonsMove === 'up' && block.previousElementSibling) {
+        block.parentElement.insertBefore(block, block.previousElementSibling);
+      } else if (button.dataset.parsonsMove === 'down' && block.nextElementSibling) {
+        block.parentElement.insertBefore(block.nextElementSibling, block);
+      }
+      [...block.parentElement.children].forEach((item, index) => { item.querySelector('.parsons-grip').textContent = index + 1; });
     });
   });
   scope.querySelectorAll('[data-run-code]').forEach((button) => {
@@ -214,14 +233,14 @@ function showInline(questionId, correct, message, checks = [], output = null) {
 
 function executionPanel(executions, title = 'Код в действии') {
   if (!executions.length) return '';
-  const cards = executions.map((item) => `<article class="execution-card"><strong>${item.correct ? '✓ Результат прошёл проверку' : '🖥️ Результат этого запуска'}</strong>${item.source ? `<pre class="execution-source">${esc(item.source)}</pre>` : ''}<span>Вывод в консоли</span><pre class="code-output">${esc(item.output || '— программа ничего не вывела —')}</pre></article>`).join('');
+  const cards = executions.map((item) => `<article class="execution-card"><strong>${item.correct ? '✓ Результат прошёл проверку' : '🖥️ Результат этого запуска'}</strong>${item.source ? `<pre class="execution-source">${esc(item.source)}</pre>` : ''}${item.checks?.length ? `<div class="execution-checks">${item.checks.map((check) => `<p><b>${check.passed ? '✓' : '↺'}</b> ожидалось <code>${esc(check.expected)}</code>, получилось <code>${esc(check.actual)}</code></p>`).join('')}</div>` : ''}<span>Вывод в консоли</span><pre class="code-output">${esc(item.output || '— программа ничего не вывела —')}</pre></article>`).join('');
   return `<section class="execution-panel card"><h2>🖥️ ${title}</h2><p>Смотри на вывод: так Python прошёл код строка за строкой.</p>${cards}</section>`;
 }
 
 function submissionResult(result, retryText = 'Попробовать ещё раз', answers = []) {
   const items = result.results.map((item) => `<div class="result-item ${item.correct ? 'ok' : 'no'}"><b>${item.correct ? '✓ Верно' : '↺ Повтори'}</b> ${esc(item.explanation || item.message || '')}</div>`).join('');
   const answerById = Object.fromEntries(answers.map((item) => [item.question_id, item.answer]));
-  const executions = result.results.filter((item) => Object.prototype.hasOwnProperty.call(item, 'output')).map((item) => ({ correct: item.correct, output: item.output, source: answerById[item.question_id] || '' }));
+  const executions = result.results.filter((item) => Object.prototype.hasOwnProperty.call(item, 'output')).map((item) => ({ correct: item.correct, output: item.output, source: answerById[item.question_id] || '', checks: item.checks || [] }));
   const action = result.passed
     ? '<a class="button blue" href="#/">К маршруту</a>'
     : `<button class="button" type="button" onclick="location.reload()">${retryText}</button>`;
@@ -233,14 +252,14 @@ async function renderLesson(id) {
   const lesson = await api(`/api/lessons/${id}`);
   const theoryCards = lesson.theory.map((card, index) => `<article class="theory-card card">
     <p class="theory-step">Шаг ${index + 1} из ${lesson.theory.length}</p><h2>${esc(card.title)}</h2><p>${esc(card.text)}</p>
-    <p class="example-label">Разберём пример</p><pre class="code-example"><code>${esc(card.example)}</code></pre>${card.tip ? `<div class="tip">${esc(card.tip)}</div>` : ''}
+    <p class="example-label">${card.language && card.language !== 'python' ? `Разберём формат · ${esc(card.language)}` : 'Разберём пример'}</p><pre class="code-example"><code>${esc(card.example)}</code></pre>${card.output !== undefined ? `<div class="example-output"><strong>Что увидим после запуска</strong><pre class="code-output">${esc(card.output || '— программа ничего не вывела —')}</pre></div>` : ''}${card.tip ? `<div class="tip">${esc(card.tip)}</div>` : ''}
   </article>`).join('');
   view.innerHTML = `<section>
     <a class="back-link" href="#/">← К маршруту</a>
     <div class="lesson-head"><div><p class="eyebrow">Урок ${lesson.order} · ${lesson.duration} минут</p><h1>${esc(lesson.title)}</h1><p class="lead">${esc(lesson.subtitle)}</p><p class="lesson-meta"><span>⚡ ${lesson.xp} XP</span><span>🧩 ${lesson.questions.length} задания</span></p></div></div>
     <aside class="learning-roadmap"><strong>Без спешки</strong><span>1. Прочитай объяснение</span><span>2. Разбери пример</span><span>3. Выполни шаги в задаче</span><p>Не надо держать всё в голове: примеры и подсказки можно открывать во время решения.</p></aside>
     <section>${theoryCards}</section>
-    <h2 class="practice-title">Сделаем вместе</h2><p class="lead">У каждой задачи есть план. Код можно проверять сколько угодно раз; для прохождения достаточно 2 правильных ответов.</p>
+    <h2 class="practice-title">От опоры к самостоятельности</h2><p class="lead">У каждой задачи есть план. Код можно запускать сколько угодно раз. Для прохождения нужно решить обязательные практические этапы — одних вариантов ответа недостаточно.</p>
     <form id="lesson-form">${lesson.questions.map((question, index) => questionTemplate(question, index + 1)).join('')}<div class="submit-row"><button class="button" type="submit">Проверить урок <span>→</span></button><span class="submit-note">Проверяй код отдельно, прежде чем сдавать.</span></div></form>
   </section>`;
   const form = document.querySelector('#lesson-form');
@@ -277,7 +296,7 @@ async function renderPractice(mode = 'guided', moduleId = '') {
   view.innerHTML = `<section class="practice-wrap"><a class="back-link" href="#/">← К маршруту</a>
     <article class="practice-hero card"><p class="eyebrow">Практика без прыжков</p><h1>${esc(session.title)}</h1><p class="lead">${esc(session.description)}</p>
       <div class="practice-modes">
-        ${modeButton('guided', '🌱 Текущий шаг', 'Одна тема, три понятных шага')}
+        ${modeButton('guided', '🌱 Последняя тема', 'От воспоминания к самостоятельному коду')}
         ${modeButton('review', '🎯 Ошибки', session.weak_count ? `${session.weak_count} слабых мест` : 'Пока ошибок нет')}
         ${modeButton('mixed', '🧩 Смешанная', 'Повтор уже открытых тем')}
       </div>
@@ -320,7 +339,7 @@ async function renderPractice(mode = 'guided', moduleId = '') {
       try {
         const answer = getAnswers(form, [question])[0];
         const result = await api('/api/practice/submit', { method: 'POST', body: JSON.stringify(answer) });
-        if (question.kind === 'code') executions.push({ correct: result.correct, output: result.output, source: answer.answer });
+        if (question.kind === 'code') executions.push({ correct: result.correct, output: result.output, source: answer.answer, checks: result.checks || [] });
         if (result.correct) correctCount += 1;
         showInline(question.id, result.correct, result.message, result.checks, result.output);
         await refreshDashboard();
@@ -397,10 +416,10 @@ async function renderProjects() {
     const state = project.completed ? 'done' : project.unlocked ? 'open' : 'locked';
     const action = project.unlocked
       ? `<a class="button ${project.completed ? 'ghost' : 'blue'}" href="#/projects/${project.id}">${project.completed ? 'Открыть снова' : 'Начать проект'} <span>→</span></a>`
-      : `<span class="project-lock">🔒 После ${project.min_lessons} уроков и предыдущего проекта</span>`;
+      : `<span class="project-lock">🔒 Сначала: ${esc(project.missing_prerequisites.join(', ') || 'предыдущий проект')}</span>`;
     return `<article class="project-card card ${state}"><div class="project-icon">${project.icon}</div><div class="project-info"><p class="eyebrow">Проект ${project.order} · ${esc(project.level)}</p><h2>${esc(project.title)}</h2><p>${esc(project.subtitle)}</p><div class="project-skills">${project.skills.map((skill) => `<span>${esc(skill)}</span>`).join('')}</div></div><div class="project-action">${action}<small>⚡ ${project.xp} XP</small></div></article>`;
   }).join('');
-  view.innerHTML = `<section class="projects-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="projects-hero card"><p class="eyebrow">Мастерская</p><h1>Проекты: от идеи к инструменту</h1><p class="lead">Здесь ты собираешь маленькие работающие программы. Каждая следующая задача добавляет один новый приём, а подсказки остаются рядом.</p></article><aside class="practice-brief"><strong>🧰 Как проходить проект</strong><p>Сначала запусти заготовку, затем меняй одну часть за раз. Проверка использует примеры, а консоль показывает реальное выполнение.</p></aside><section class="project-list">${cards}</section></section>`;
+  view.innerHTML = `<section class="projects-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="projects-hero card"><p class="eyebrow">Мастерская</p><h1>Проекты: от идеи к инструменту</h1><p class="lead">Здесь ты собираешь маленькие работающие программы. Проект открывается только после конкретных нужных навыков, а не по случайному числу уроков.</p></article><aside class="practice-brief"><strong>🧰 Как проходить проект</strong><p>Сначала запусти заготовку, затем меняй одну часть за раз. Итоговая проверка запускает несколько входных сценариев, поэтому программа должна действительно работать с данными.</p></aside><section class="project-list">${cards}</section></section>`;
 }
 
 async function renderProject(id) {
@@ -442,7 +461,7 @@ function getCodeInputs(scope, questionId) {
 async function renderExam(moduleId) {
   loading();
   const exam = await api(`/api/exams/${moduleId}`);
-  view.innerHTML = `<section class="exam-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="exam-hero card"><p class="eyebrow">Контрольная точка</p><h1>${esc(exam.title)}</h1><p class="lead">${esc(exam.description)} Для зачёта нужно 70% правильных ответов. Награда — 50 XP.</p></article><form id="exam-form">${exam.questions.map((question, index) => questionTemplate(question, index + 1)).join('')}<div class="submit-row"><button class="button blue" type="submit">Сдать экзамен <span>🏁</span></button></div></form></section>`;
+  view.innerHTML = `<section class="exam-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="exam-hero card"><p class="eyebrow">Контрольная точка</p><h1>${esc(exam.title)}</h1><p class="lead">${esc(exam.description)} Для зачёта нужно 70% и обязательные практические задания. Одними вариантами ответа экзамен не сдать. Награда — 50 XP.</p></article><form id="exam-form">${exam.questions.map((question, index) => questionTemplate(question, index + 1)).join('')}<div class="submit-row"><button class="button blue" type="submit">Сдать экзамен <span>🏁</span></button></div></form></section>`;
   const form = document.querySelector('#exam-form');
   bindQuestionControls(form);
   form.addEventListener('submit', async (event) => {

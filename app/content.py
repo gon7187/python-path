@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from app.extended_curriculum import EXTRA_EXAMS, EXTRA_LESSONS, EXTRA_MODULES
+from app.foundation_expansion import (
+    FOUNDATION_CHALLENGES,
+    FOUNDATION_INSERTIONS,
+    FOUNDATION_REPLACEMENTS,
+)
 from app.gentle_start import GENTLE_START_EXAMS, GENTLE_START_LESSONS, GENTLE_START_MODULES
+from app.learning_design import enrich_curriculum
 
 
 def theory(title: str, text: str, example: str, tip: str = "") -> dict:
@@ -147,7 +153,7 @@ LESSONS = [
             choice(
                 "hello-print",
                 "Какая команда выводит текст на экран?",
-                ["show('Привет')", "print('Привет')", "output('Привет')"],
+                ["только строка 'Привет'", "print('Привет')", "переменная с текстом"],
                 "print('Привет')",
                 "В Python за вывод на экран отвечает функция print().",
             ),
@@ -184,8 +190,8 @@ LESSONS = [
             ),
             theory(
                 "У значений есть тип",
-                "Целые числа — int, дробные — float, текст — str, правда/ложь — bool.",
-                "age = 18\nprice = 19.9\nis_ready = True",
+                "Мы уже встречали целые числа int, текст str и логические значения bool. Здесь связываем их с переменными.",
+                "age = 18\nname = 'Маша'\nis_ready = True",
             ),
             theory(
                 "f-строки собирают текст",
@@ -232,22 +238,22 @@ LESSONS = [
                 "name = input('Как тебя зовут? ')\nprint(f'Рада знакомству, {name}!')",
             ),
             theory(
-                "Преобразуем типы осознанно",
-                "Чтобы получить число из ввода, оберни input в int() или float().",
+                "Повторяем знакомое преобразование",
+                "Чтобы получить целое число из ввода, оберни input в уже изученный int().",
                 "age = int(input('Твой возраст: '))\nprint(age + 1)",
                 "Преобразовывай в число, только когда ожидаешь цифры.",
             ),
             theory(
-                "Методы строк",
-                "lower() меняет регистр, strip() убирает пробелы по краям, len() считает символы.",
-                "word = '  Python  '\nprint(word.strip().lower())",
+                "Собираем ответ через f-строку",
+                "Полученный текст можно сразу подставить в уже знакомую f-строку и показать человеку.",
+                "city = input('Город: ')\nprint(f'Ты из города {city}')",
             ),
         ],
         [
             choice(
                 "input-type",
                 "Какой тип вернёт `input()` без преобразования?",
-                ["int", "str", "bool"],
+                ["число", "str", "команда"],
                 "str",
                 "Даже введённое 42 сначала будет строкой '42'.",
             ),
@@ -411,58 +417,206 @@ LESSONS = [
         "functions",
         "structures",
         7,
-        "Функции",
-        "Убираем повторения из кода",
-        13,
+        "Функция: первый запуск",
+        "Даём знакомому действию имя",
+        6,
         35,
         [
             theory(
-                "Функция упаковывает действие",
-                "def создаёт функцию, а параметры принимают данные снаружи.",
-                "def greet(name):\n    print(f'Привет, {name}!')",
+                "Функция — это команда, которой дали имя",
+                "Если одно действие понадобится несколько раз, его можно записать под понятным именем. Пока функция ничего не получает снаружи — она просто выполняет знакомую команду print.",
+                "def say_hello():\n    print('Привет!')",
             ),
             theory(
-                "return отдаёт результат",
-                "print показывает значение человеку, return возвращает его в программу для дальнейшей работы.",
+                "Сначала создаём, потом вызываем",
+                "Строки после def только создают функцию. Чтобы она сработала, нужно отдельно написать её имя со скобками.",
+                "def say_hello():\n    print('Привет!')\n\nsay_hello()",
+            ),
+            theory(
+                "Отступ показывает, что находится внутри",
+                "Строка с четырьмя пробелами после def — тело функции. Сейчас запомни только форму: def, имя, скобки, двоеточие и отступ.",
+                "def say_hello():\n    print('Привет!')",
+                "Не пытайся запомнить всё: в этой задаче нужно лишь вызвать уже готовую функцию.",
+            ),
+        ],
+        [
+            choice(
+                "func-definition",
+                "Какая строка создаёт функцию с именем say_hello?",
+                ["say_hello()", "def say_hello():", "print('say_hello')"],
+                "def say_hello():",
+                "def начинает создание функции, затем идут имя, скобки и двоеточие.",
+            ),
+            text(
+                "func-first-call",
+                "Как записать вызов функции `say_hello`?",
+                ["say_hello()"],
+                "Функцию запускают её именем и круглыми скобками: say_hello().",
+            ),
+            code(
+                "func-first-code",
+                "Запусти готовую функцию: добавь внизу `say_hello()`.",
+                "def say_hello():\n    print('Привет!')\n\n# вызови функцию здесь\n",
+                [{"kind": "stdout", "expected": "Привет!"}],
+                "Функция уже создана. Последняя строка с её вызовом запустит print внутри функции.",
+                "На новой строке после комментария напиши только say_hello().",
+            ),
+        ],
+    ),
+    lesson(
+        "functions-parameters",
+        "structures",
+        8,
+        "Функция с параметром",
+        "Передаём функции одно значение",
+        7,
+        35,
+        [
+            theory(
+                "Параметр — пустое место внутри функции",
+                "Имя в скобках после названия функции называется параметром. Когда функция запустится, параметр получит значение, которое мы ей передали.",
+                "def greet(name):\n    print('Привет, ' + name)",
+            ),
+            theory(
+                "Аргумент заполняет параметр",
+                "В вызове мы передаём аргумент. В примере строка 'Аня' попадает в параметр name.",
+                "greet('Аня')  # name станет 'Аня'",
+            ),
+            theory(
+                "Одна функция — разные значения",
+                "Форма функции не меняется. Меняем только аргумент при вызове — и получаем другое приветствие.",
+                "greet('Аня')\ngreet('Илья')",
+            ),
+        ],
+        [
+            choice(
+                "func-parameter",
+                "Как называется name в строке `def greet(name):`?",
+                ["Параметр", "Аргумент", "Комментарий"],
+                "Параметр",
+                "Параметр стоит в определении функции и ждёт значение.",
+            ),
+            text(
+                "func-argument",
+                "Что передаётся в параметр name при вызове `greet('Аня')`?",
+                ["Аня", "'Аня'"],
+                "Аргумент 'Аня' становится значением параметра name внутри функции.",
+            ),
+            code(
+                "func-parameter-code",
+                "Вызови готовую функцию с именем `Аня`, чтобы она вывела приветствие.",
+                "def greet(name):\n    print('Привет, ' + name)\n\n# вызови greet с именем Аня\n",
+                [{"kind": "stdout", "expected": "Привет, Аня"}],
+                "Функция уже умеет печатать текст. Нужно передать ей одно значение в скобках.",
+                "После комментария напиши greet('Аня').",
+            ),
+        ],
+    ),
+    lesson(
+        "functions-return",
+        "structures",
+        9,
+        "Функция возвращает результат",
+        "Отличаем return от print",
+        7,
+        35,
+        [
+            theory(
+                "print показывает, return отдаёт",
+                "print показывает значение на экране. return передаёт его обратно в программу: результат можно сохранить, посчитать или напечатать позже.",
                 "def double(number):\n    return number * 2",
             ),
             theory(
-                "Имя функции — обещание",
-                "Хорошее имя отвечает на вопрос: что делает функция? Используй глагол или понятное действие.",
-                "def calculate_discount(price):\n    return price * 0.9",
+                "Вызов можно поставить внутрь print",
+                "Сначала Python вызывает функцию и получает результат от return. Затем print показывает этот результат человеку.",
+                "print(double(3))  # 6",
+            ),
+            theory(
+                "Начинаем с готового примера",
+                "В этой практике не нужно писать return самому. Измени одно число и посмотри, как готовая функция возвращает новый результат.",
+                "def double(number):\n    return number * 2\n\nprint(double(3))",
             ),
         ],
         [
             choice(
                 "func-return",
-                "Что позволяет использовать результат функции в выражении?",
+                "Что позволяет использовать результат функции в следующем вычислении?",
                 ["print", "return", "def"],
                 "return",
                 "return передаёт значение туда, где функцию вызвали.",
             ),
             text(
                 "func-call",
-                "Чему равно `triple(4)`, если функция возвращает number * 3?",
-                ["12"],
-                "Функция умножает переданное 4 на 3.",
+                "Что выведет `print(double(3))`, если `double` возвращает number * 2?",
+                ["6"],
+                "Функция возвращает 3 * 2, а print показывает 6.",
+            ),
+            code(
+                "func-return-code",
+                "Измени 3 на 4, чтобы программа вывела `8`.",
+                "def double(number):\n    return number * 2\n\nprint(double(3))\n",
+                [{"kind": "stdout", "expected": "8"}],
+                "Форма функции уже готова. Достаточно передать в неё другое число.",
+                "Замени только 3 внутри двойных скобок на 4.",
+            ),
+        ],
+    ),
+    lesson(
+        "functions-greeting",
+        "structures",
+        10,
+        "Собираем приветствие",
+        "Параметр, return и знакомая f-строка",
+        8,
+        35,
+        [
+            theory(
+                "Собираем знакомые детали",
+                "Здесь нет новой магии: параметр name ты уже видел, return уже возвращал число, а f-строка уже подставляла переменную в текст.",
+                "def greeting(name):\n    return f'Привет, {name}!'",
+            ),
+            theory(
+                "Сначала верни текст",
+                "Внутри функции после return стоит готовое выражение. Его не нужно оборачивать в print: тест сам вызовет функцию и проверит то, что она вернула.",
+                "return f'Привет, {name}!'",
+            ),
+            theory(
+                "Проверь себя на двух именах",
+                "Одна и та же функция должна работать с любым переданным именем. Поэтому проверка использует не один, а два примера.",
+                "greeting('Аня')  # Привет, Аня!\ngreeting('Илья')  # Привет, Илья!",
+            ),
+        ],
+        [
+            choice(
+                "func-greeting-piece",
+                "Что нужно поставить перед строкой, чтобы `{name}` подставилось в текст?",
+                ["f", "def", "return"],
+                "f",
+                "Буква f перед кавычкой включает подстановку значения из фигурных скобок.",
+            ),
+            text(
+                "func-greeting-result",
+                "Что вернёт `greeting('Аня')`?",
+                ["Привет, Аня!"],
+                "Параметр name получил значение Аня и подставился в f-строку.",
             ),
             code(
                 "func-code",
-                "Напиши `greeting(name)`, возвращающую `Привет, <name>!`.",
-                "def greeting(name):\n    # верни приветствие здесь\n    return ''\n",
+                "Заполни одну строку: верни приветствие для переданного name.",
+                "def greeting(name):\n    return ''\n",
                 [
                     {"kind": "call", "call": "greeting('Аня')", "expected": "Привет, Аня!"},
                     {"kind": "call", "call": "greeting('Илья')", "expected": "Привет, Илья!"},
                 ],
-                "Параметр делает одну функцию полезной для разных имён.",
-                "Верни f-строку, не печатай её: здесь нужен return.",
+                "Все части уже знакомы: верни f-строку, в которой {name} стоит внутри текста.",
+                "Замени пустую строку после return на f'Привет, {name}!'.",
             ),
         ],
     ),
     lesson(
         "lists",
         "structures",
-        8,
+        11,
         "Списки",
         "Храним несколько значений",
         13,
@@ -495,21 +649,18 @@ LESSONS = [
             text("list-length", "Чему равно `len([10, 20, 30])`?", ["3"], "В списке три элемента."),
             code(
                 "list-code",
-                "Напиши `last_item(items)`, которая возвращает последний элемент списка.",
-                "def last_item(items):\n    # верни последний элемент здесь\n    return None\n",
-                [
-                    {"kind": "call", "call": "last_item(['a', 'b'])", "expected": "b"},
-                    {"kind": "call", "call": "last_item([3, 7, 9])", "expected": 9},
-                ],
+                "Выведи последний элемент списка — `вода`.",
+                "items = ['чай', 'кофе', 'вода']\n# напечатай последний элемент\n",
+                [{"kind": "stdout", "expected": "вода"}],
                 "Отрицательный индекс достаёт последний элемент независимо от длины списка.",
-                "Используй индекс -1.",
+                "Используй print(items[-1]).",
             ),
         ],
     ),
     lesson(
         "dicts-sets",
         "structures",
-        9,
+        12,
         "Словари и множества",
         "Быстро находим данные и убираем повторы",
         14,
@@ -547,25 +698,18 @@ LESSONS = [
             ),
             code(
                 "dict-code",
-                "Напиши `get_level(profile)`: верни level, а если ключа нет — 1.",
-                "def get_level(profile):\n    # верни уровень здесь\n    return 0\n",
-                [
-                    {
-                        "kind": "call",
-                        "call": "get_level({'name': 'Аня', 'level': 4})",
-                        "expected": 4,
-                    },
-                    {"kind": "call", "call": "get_level({'name': 'Аня'})", "expected": 1},
-                ],
+                "Выведи уровень из словаря, а если его нет — число `1`.",
+                "profile = {'name': 'Аня'}\n# напечатай level или 1\n",
+                [{"kind": "stdout", "expected": "1"}],
                 "get позволяет задать понятное значение по умолчанию.",
-                "Вспомни метод словаря .get('level', 1).",
+                "Используй print(profile.get('level', 1)).",
             ),
         ],
     ),
     lesson(
         "files",
         "realworld",
-        10,
+        13,
         "Файлы",
         "Сохраняем данные между запусками",
         12,
@@ -620,7 +764,7 @@ LESSONS = [
     lesson(
         "exceptions",
         "realworld",
-        11,
+        14,
         "Исключения",
         "Делаем программу устойчивой",
         13,
@@ -659,25 +803,18 @@ LESSONS = [
             ),
             code(
                 "exception-code",
-                "Напиши `safe_divide(left, right)`. При right = 0 верни `Нельзя делить на ноль`, иначе — частное.",
-                "def safe_divide(left, right):\n    # верни результат здесь\n    return 0\n",
-                [
-                    {"kind": "call", "call": "safe_divide(8, 2)", "expected": 4.0},
-                    {
-                        "kind": "call",
-                        "call": "safe_divide(8, 0)",
-                        "expected": "Нельзя делить на ноль",
-                    },
-                ],
-                "Проверка граничного случая до деления делает поведение функции понятным.",
-                "Сначала проверь right == 0, иначе выполни left / right.",
+                "Добавь обработчик ValueError, чтобы вместо ошибки появилось `Нужны цифры`.",
+                "try:\n    number = int('кот')\n    print(number)\n# добавь except ниже\n",
+                [{"kind": "stdout", "expected": "Нужны цифры"}],
+                "int('кот') вызывает ValueError. В except можно показать человеку понятное сообщение.",
+                "Добавь две строки: except ValueError: и с отступом print('Нужны цифры').",
             ),
         ],
     ),
     lesson(
         "classes",
         "realworld",
-        12,
+        15,
         "Классы и объекты",
         "Описываем собственные сущности",
         15,
@@ -689,14 +826,14 @@ LESSONS = [
                 "class Player:\n    role = 'игрок'\n\nhero = Player()",
             ),
             theory(
-                "__init__ задаёт состояние",
-                "Метод __init__ запускается при создании объекта. self — это сам объект.",
-                "class Player:\n    def __init__(self, name):\n        self.name = name",
+                "Создаём объект по чертежу",
+                "После `Badge()` появляется конкретный объект. Его можно сохранить в переменную и обратиться к данным через точку.",
+                "badge = Badge()\nprint(badge.title)",
             ),
             theory(
-                "Методы описывают поведение",
-                "Метод получает self первым параметром и может обращаться к данным объекта.",
-                "class Player:\n    def level_up(self):\n        self.level += 1",
+                "Сначала только одно свойство",
+                "Пока не добавляем __init__, self и методы. Достаточно положить один общий текст title в класс и прочитать его у объекта.",
+                "class Badge:\n    title = 'Первые шаги'",
             ),
         ],
         [
@@ -709,28 +846,37 @@ LESSONS = [
             ),
             text(
                 "class-init",
-                "Как называется метод, который запускается при создании объекта?",
-                ["__init__", "init"],
-                "__init__ задаёт начальное состояние объекта.",
+                "Как называется переменная, в которой лежит созданный объект в примере `badge = Badge()`?",
+                ["badge"],
+                "Badge() создаёт объект, а badge сохраняет его для дальнейшей работы.",
             ),
             code(
                 "class-code",
-                "Создай класс `Badge` с методом `label(self, name)`, возвращающим `Награда: <name>`.",
-                "class Badge:\n    def label(self, name):\n        # верни текст награды здесь\n        return ''\n",
-                [
-                    {
-                        "kind": "call",
-                        "call": "Badge().label('Первые шаги')",
-                        "expected": "Награда: Первые шаги",
-                    }
-                ],
-                "Поздравляем! Теперь ты умеешь описывать собственные объекты.",
-                "Метод должен вернуть f-строку. self уже передан первым параметром.",
+                "Измени title на `Первые шаги`, чтобы объект вывел это название.",
+                "class Badge:\n    title = 'Награда'\n\nbadge = Badge()\nprint(badge.title)\n",
+                [{"kind": "stdout", "expected": "Первые шаги"}],
+                "Класс и объект уже готовы. В этой задаче меняется только текст свойства title.",
+                "Замени только слово Награда в кавычках на Первые шаги.",
             ),
         ],
     ),
 ]
 
+
+def apply_foundation_expansion() -> None:
+    """Split overloaded topics into one-concept steps while preserving old lesson IDs."""
+    by_id = {item["id"]: item for item in LESSONS}
+    for lesson_id, replacement in FOUNDATION_REPLACEMENTS.items():
+        by_id[lesson_id].update(replacement)
+    for anchor_id, new_lesson in FOUNDATION_INSERTIONS:
+        anchor_index = next(index for index, item in enumerate(LESSONS) if item["id"] == anchor_id)
+        LESSONS.insert(anchor_index + 1, new_lesson)
+    by_id = {item["id"]: item for item in LESSONS}
+    for lesson_id, challenge in FOUNDATION_CHALLENGES.items():
+        by_id[lesson_id]["questions"].append(challenge)
+
+
+apply_foundation_expansion()
 
 MODULES.extend(EXTRA_MODULES)
 LESSONS.extend(EXTRA_LESSONS)
@@ -756,7 +902,7 @@ def add_learning_scaffolds() -> None:
             theory(
                 "Перед практикой: не нужно угадывать",
                 "Посмотри на пример ещё раз. Выполняй задание по одному действию и проверяй код отдельно. Ошибка — это подсказка, а не оценка твоих способностей.",
-                "# 1. Прочитай задание\n# 2. Повтори маленький шаг\n# 3. Проверь результат",
+                "1. Прочитай задание\n2. Предскажи результат\n3. Измени один шаг\n4. Запусти и сравни",
                 "Если застрял, открой подсказку и измени в примере только одну часть.",
             )
         )
@@ -765,6 +911,7 @@ def add_learning_scaffolds() -> None:
 
 
 add_learning_scaffolds()
+enrich_curriculum(LESSONS)
 for lesson_order, item in enumerate(LESSONS, start=1):
     item["order"] = lesson_order
 
@@ -799,6 +946,53 @@ EXAMS = {
     },
     **EXTRA_EXAMS,
 }
+
+
+def strengthen_foundation_exams() -> None:
+    """Make every early exam mixed and impossible to pass without writing code."""
+    for module in MODULES:
+        exam = EXAMS[module["id"]]
+        if exam.get("mandatory_question_ids"):
+            continue
+        module_questions = [
+            question
+            for item in LESSONS
+            if item["module_id"] == module["id"]
+            for question in item["questions"]
+        ]
+        by_kind = {
+            kind: [question for question in module_questions if question["kind"] == kind]
+            for kind in ("choice", "input", "code")
+        }
+        proposed = [
+            by_kind["choice"][0],
+            by_kind["input"][len(by_kind["input"]) // 2],
+            by_kind["code"][len(by_kind["code"]) // 3],
+            by_kind["choice"][-1],
+            by_kind["input"][-1],
+            by_kind["code"][-1],
+        ]
+        selected = list(dict.fromkeys(question["id"] for question in proposed))
+        selected.extend(
+            question["id"]
+            for question in module_questions
+            if question["id"] not in selected and len(selected) < 6
+        )
+        exam["question_ids"] = selected
+        exam["mandatory_question_ids"] = [
+            question_id
+            for question_id in selected
+            if next(question for question in module_questions if question["id"] == question_id)[
+                "kind"
+            ]
+            == "code"
+        ]
+        exam["description"] += (
+            " Здесь смешаны воспроизведение, понимание и обязательный код по всему разделу."
+        )
+
+
+strengthen_foundation_exams()
 
 LESSON_BY_ID = {item["id"]: item for item in LESSONS}
 QUESTION_BY_ID = {question["id"]: question for item in LESSONS for question in item["questions"]}

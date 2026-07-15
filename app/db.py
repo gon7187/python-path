@@ -141,6 +141,41 @@ def save_project(project_id: str, xp: int) -> tuple[int, bool]:
     return (xp if was_new else 0), was_new
 
 
+def _attempt_snapshot(rows: list[sqlite3.Row]) -> tuple[dict[str, dict], list[str]]:
+    """Summarize attempts and forget a weak spot after two consecutive successes."""
+    stats: dict[str, dict] = {}
+    for row in rows:
+        question_id = row["question_id"]
+        correct = bool(row["correct"])
+        item = stats.setdefault(
+            question_id,
+            {
+                "total_attempts": 0,
+                "correct_attempts": 0,
+                "correct_streak": 0,
+                "has_mistake": False,
+                "last_attempt_at": None,
+                "last_correct": None,
+            },
+        )
+        item["total_attempts"] += 1
+        item["correct_attempts"] += int(correct)
+        item["correct_streak"] = item["correct_streak"] + 1 if correct else 0
+        item["has_mistake"] = item["has_mistake"] or not correct
+        item["last_attempt_at"] = row["created_at"]
+        item["last_correct"] = correct
+
+    weak = sorted(
+        (
+            question_id
+            for question_id, item in stats.items()
+            if item["has_mistake"] and item["correct_streak"] < 2
+        ),
+        key=lambda question_id: stats[question_id]["last_attempt_at"] or "",
+    )[:10]
+    return stats, weak
+
+
 def state() -> dict:
     with connection() as conn:
         profile = dict(
@@ -162,19 +197,15 @@ def state() -> dict:
             row["project_id"]: dict(row)
             for row in conn.execute("SELECT project_id, completed_at FROM project_progress")
         }
-        weak = [
-            row["question_id"]
-            for row in conn.execute(
-                """
-                SELECT question_id FROM attempts GROUP BY question_id
-                HAVING SUM(correct) < COUNT(*) ORDER BY MAX(created_at) ASC LIMIT 10
-                """
-            )
-        ]
+        attempt_rows = list(
+            conn.execute("SELECT question_id, correct, created_at FROM attempts ORDER BY id ASC")
+        )
+        question_stats, weak = _attempt_snapshot(attempt_rows)
     return {
         "profile": profile,
         "lessons": lessons,
         "exams": exams,
         "projects": projects,
         "weak_question_ids": weak,
+        "question_stats": question_stats,
     }

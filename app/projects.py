@@ -12,7 +12,7 @@ PROJECTS: list[dict[str, Any]] = [
         "subtitle": "Первый инструмент: программа спрашивает имя и здоровается.",
         "icon": "👋",
         "level": "Старт",
-        "min_lessons": 0,
+        "requires_lesson_ids": ["warmup-input"],
         "xp": 25,
         "description": "Собери короткую программу с input(), переменной и f-строкой.",
         "skills": ["input()", "переменные", "f-строки"],
@@ -25,6 +25,18 @@ PROJECTS: list[dict[str, Any]] = [
         "test_inputs": ["Лена"],
         "input_example": ["Лена"],
         "tests": [{"kind": "stdout", "expected": "Имя: Лена\nПривет, Лена!"}],
+        "scenarios": [
+            {
+                "name": "имя из примера",
+                "inputs": ["Лена"],
+                "tests": [{"kind": "stdout", "expected": "Имя: Лена\nПривет, Лена!"}],
+            },
+            {
+                "name": "другое имя",
+                "inputs": ["Макс"],
+                "tests": [{"kind": "stdout", "expected": "Имя: Макс\nПривет, Макс!"}],
+            },
+        ],
         "hints": [
             "input(...) возвращает текст — его можно сразу сохранить в name.",
             "Для подстановки имени используй print(f'Привет, {name}!').",
@@ -38,7 +50,7 @@ PROJECTS: list[dict[str, Any]] = [
         "subtitle": "Считаем стоимость нескольких одинаковых товаров.",
         "icon": "🧮",
         "level": "База",
-        "min_lessons": 5,
+        "requires_lesson_ids": ["warmup-convert"],
         "xp": 35,
         "description": "Преврати текстовый ввод в числа, умножь цену на количество и покажи итог.",
         "skills": ["int()", "умножение", "f-строки"],
@@ -51,6 +63,18 @@ PROJECTS: list[dict[str, Any]] = [
         "test_inputs": ["120", "3"],
         "input_example": ["120", "3"],
         "tests": [{"kind": "stdout", "expected": "Цена: 120\nКоличество: 3\nИтого: 360"}],
+        "scenarios": [
+            {
+                "name": "три товара",
+                "inputs": ["120", "3"],
+                "tests": [{"kind": "stdout", "expected": "Цена: 120\nКоличество: 3\nИтого: 360"}],
+            },
+            {
+                "name": "другая цена и количество",
+                "inputs": ["75", "2"],
+                "tests": [{"kind": "stdout", "expected": "Цена: 75\nКоличество: 2\nИтого: 150"}],
+            },
+        ],
         "hints": [
             "После int(...) price и count уже числа: их можно умножать.",
             "Сначала вычисли price * count, затем подставь результат в f-строку.",
@@ -64,7 +88,7 @@ PROJECTS: list[dict[str, Any]] = [
         "subtitle": "Принимаем решение через if и else.",
         "icon": "🔐",
         "level": "Логика",
-        "min_lessons": 10,
+        "requires_lesson_ids": ["conditions-else"],
         "xp": 45,
         "description": "Сделай мини-проверку пароля: правильный открывает доступ, любой другой — нет.",
         "skills": ["условия", "==", "ветка else"],
@@ -77,6 +101,18 @@ PROJECTS: list[dict[str, Any]] = [
         "test_inputs": ["python"],
         "input_example": ["python"],
         "tests": [{"kind": "stdout", "expected": "Пароль: python\nДоступ открыт"}],
+        "scenarios": [
+            {
+                "name": "верный пароль",
+                "inputs": ["python"],
+                "tests": [{"kind": "stdout", "expected": "Пароль: python\nДоступ открыт"}],
+            },
+            {
+                "name": "неверный пароль",
+                "inputs": ["secret"],
+                "tests": [{"kind": "stdout", "expected": "Пароль: secret\nДоступ закрыт"}],
+            },
+        ],
         "hints": [
             "Сравнение пишется двумя знаками: password == 'python'.",
             "После if и else поставь двоеточие и не забудь отступ в четыре пробела.",
@@ -90,7 +126,7 @@ PROJECTS: list[dict[str, Any]] = [
         "subtitle": "Разбираем текст и получаем полезную цифру.",
         "icon": "📝",
         "level": "Строки",
-        "min_lessons": 16,
+        "requires_lesson_ids": ["strings-split"],
         "xp": 55,
         "description": "Программа получает фразу, делит её на слова и сообщает количество слов.",
         "skills": ["split()", "списки", "len()"],
@@ -103,6 +139,23 @@ PROJECTS: list[dict[str, Any]] = [
         "test_inputs": ["учу Python каждый день"],
         "input_example": ["учу Python каждый день"],
         "tests": [{"kind": "stdout", "expected": "Фраза: учу Python каждый день\nСлов: 4"}],
+        "scenarios": [
+            {
+                "name": "фраза из примера",
+                "inputs": ["учу Python каждый день"],
+                "tests": [
+                    {
+                        "kind": "stdout",
+                        "expected": "Фраза: учу Python каждый день\nСлов: 4",
+                    }
+                ],
+            },
+            {
+                "name": "короткая фраза",
+                "inputs": ["два слова"],
+                "tests": [{"kind": "stdout", "expected": "Фраза: два слова\nСлов: 2"}],
+            },
+        ],
         "hints": [
             "words — это список слов, поэтому len(words) даст нужное число.",
             "Результат удобно показать так: print(f'Слов: {len(words)}').",
@@ -116,22 +169,25 @@ PROJECTS: list[dict[str, Any]] = [
         "subtitle": "Считаем сумму и среднее по списку.",
         "icon": "📊",
         "level": "Коллекции",
-        "min_lessons": 25,
+        "requires_lesson_ids": ["functions-return", "lists-sum"],
         "xp": 65,
-        "description": "Собери маленький отчёт: сколько оценок, какая сумма и среднее значение.",
-        "skills": ["списки", "sum()", "len()"],
+        "description": "Собери функцию отчёта: она принимает список и возвращает среднее значение.",
+        "skills": ["функции", "списки", "sum()", "len()"],
         "checklist": [
-            "Оставить список scores как есть.",
-            "Посчитать сумму и среднее через sum и len.",
-            "Вывести среднее в формате «Среднее: число».",
+            "Оставить имя функции average_score и параметр scores.",
+            "Посчитать сумму через sum и количество через len.",
+            "Вернуть среднее значение через return.",
         ],
-        "starter": "scores = [5, 4, 5, 3]\ntotal = sum(scores)\naverage = total / len(scores)\n# выведи среднее\n",
+        "starter": "def average_score(scores):\n    total = sum(scores)\n    # верни среднее значение\n    return 0\n",
         "test_inputs": [],
         "input_example": [],
-        "tests": [{"kind": "stdout", "expected": "Среднее: 4.25"}],
+        "tests": [
+            {"kind": "call", "call": "average_score([5, 4, 5, 3])", "expected": 4.25},
+            {"kind": "call", "call": "average_score([2, 4])", "expected": 3.0},
+        ],
         "hints": [
-            "total и len(scores) уже готовы: осталось вывести average.",
-            "В f-строке можно подставить average прямо в фигурные скобки.",
+            "total уже готов. Подумай, на какое количество элементов его разделить.",
+            "Функция должна вернуть вычисление, а не печатать один заранее известный ответ.",
         ],
         "success": "Сводка готова: список превратился в понятную метрику.",
     },
@@ -142,22 +198,33 @@ PROJECTS: list[dict[str, Any]] = [
         "subtitle": "Собираем и красиво показываем данные из словаря.",
         "icon": "📇",
         "level": "Данные",
-        "min_lessons": 40,
+        "requires_lesson_ids": ["functions-return", "dicts-sets"],
         "xp": 75,
-        "description": "Заполни словарь с контактными данными и собери из него аккуратную карточку.",
-        "skills": ["словари", "ключи", "f-строки"],
+        "description": "Напиши функцию, которая собирает аккуратную карточку из любого словаря контакта.",
+        "skills": ["функции", "словари", "ключи", "f-строки"],
         "checklist": [
-            "Оставить ключи name и city в словаре contact.",
-            "Достать значения по ключам.",
-            "Вывести одну строку с именем и городом.",
+            "Оставить функцию format_contact(contact).",
+            "Достать name и city по ключам.",
+            "Вернуть одну строку с именем и городом.",
         ],
-        "starter": "contact = {'name': 'Мира', 'city': 'Казань'}\n# выведи: Мира — Казань\n",
+        "starter": "def format_contact(contact):\n    # верни: имя — город\n    return ''\n",
         "test_inputs": [],
         "input_example": [],
-        "tests": [{"kind": "stdout", "expected": "Мира — Казань"}],
+        "tests": [
+            {
+                "kind": "call",
+                "call": "format_contact({'name': 'Мира', 'city': 'Казань'})",
+                "expected": "Мира — Казань",
+            },
+            {
+                "kind": "call",
+                "call": "format_contact({'name': 'Лев', 'city': 'Тула'})",
+                "expected": "Лев — Тула",
+            },
+        ],
         "hints": [
-            "Значение по ключу читается так: contact['name'].",
-            "Собери обе части одной f-строкой: print(f\"{contact['name']} — {contact['city']}\").",
+            "Сначала отдельно прочитай значения contact['name'] и contact['city'].",
+            "Соедини оба значения одной f-строкой и верни её через return.",
         ],
         "success": "Карточка контакта готова: данные из словаря стали понятным интерфейсом.",
     },
@@ -168,7 +235,15 @@ PROJECT_BY_ID = {project["id"]: project for project in PROJECTS}
 
 def public_project(project: dict[str, Any], include_editor: bool = False) -> dict[str, Any]:
     """Не выдаёт тесты и контрольные входные данные в браузер."""
-    hidden = {"tests", "test_inputs", "starter", "hints", "checklist", "input_example"}
+    hidden = {
+        "tests",
+        "scenarios",
+        "test_inputs",
+        "starter",
+        "hints",
+        "checklist",
+        "input_example",
+    }
     result = {key: value for key, value in project.items() if key not in hidden}
     if include_editor:
         result.update(

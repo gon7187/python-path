@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.content import LESSONS
+from app.content import EXAMS, LESSONS, QUESTION_BY_ID
 from app.db import save_lesson
 from app.main import app
 
@@ -9,7 +9,7 @@ def test_lesson_unlocking_and_progression() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")
         dashboard = client.get("/api/dashboard").json()
-        assert dashboard["total_lessons"] == 139
+        assert dashboard["total_lessons"] == 151
         course = client.get("/api/course").json()
         first_module = course["modules"][0]
         assert first_module["lessons"][0]["unlocked"] is True
@@ -46,7 +46,8 @@ def test_extended_course_unlocks_after_foundation() -> None:
         target = next(lesson for lesson in LESSONS if lesson["id"] == "operators-arithmetic")
         target_index = LESSONS.index(target)
         for lesson in LESSONS[:target_index]:
-            save_lesson(lesson["id"], 3, 3, lesson["xp"])
+            total = len(lesson["questions"])
+            save_lesson(lesson["id"], total, total, lesson["xp"])
 
         response = client.get("/api/lessons/operators-arithmetic")
         assert response.status_code == 200
@@ -100,8 +101,11 @@ def test_projects_are_progressive_and_run_in_the_sandbox() -> None:
         client.post("/api/reset")
         projects = client.get("/api/projects").json()["projects"]
         assert len(projects) == 6
-        assert projects[0]["unlocked"] is True
+        assert projects[0]["unlocked"] is False
         assert projects[1]["unlocked"] is False
+
+        prerequisite = next(item for item in LESSONS if item["id"] == "warmup-input")
+        save_lesson(prerequisite["id"], 3, 3, prerequisite["xp"])
 
         project = client.get("/api/projects/greeting-card").json()
         assert project["starter"].startswith("name = input")
@@ -119,7 +123,14 @@ def test_projects_are_progressive_and_run_in_the_sandbox() -> None:
             "/api/projects/greeting-card/submit", json={"answer": source}
         ).json()
         assert submission["correct"] is True
+        assert all(item["correct"] for item in submission["scenarios"])
         assert submission["xp_gained"] == 25
+
+        hardcoded = client.post(
+            "/api/projects/greeting-card/submit",
+            json={"answer": "input('Имя: ')\nprint('Привет, Лена!')\n"},
+        ).json()
+        assert hardcoded["correct"] is False
         client.post("/api/reset")
 
 
@@ -128,7 +139,7 @@ def test_practice_sessions_are_guided_and_repeat_errors() -> None:
         client.post("/api/reset")
 
         session = client.get("/api/practice/session?mode=guided").json()
-        assert session["title"] == "По текущему шагу"
+        assert session["title"] == "Пробный первый шаг"
         assert [question["kind"] for question in session["questions"]] == [
             "choice",
             "input",
@@ -136,6 +147,9 @@ def test_practice_sessions_are_guided_and_repeat_errors() -> None:
         ]
         assert all(question["guide"] for question in session["questions"])
         assert session["available_modules"][0]["id"] == "gentle-start"
+
+        first = LESSONS[0]
+        save_lesson(first["id"], 3, 3, first["xp"])
 
         client.post(
             "/api/practice/submit",
@@ -145,6 +159,17 @@ def test_practice_sessions_are_guided_and_repeat_errors() -> None:
         assert review["title"] == "Повторяем ошибки"
         assert review["questions"][0]["id"] == "warmup-route-choice"
 
+        for _ in range(2):
+            client.post(
+                "/api/practice/submit",
+                json={
+                    "question_id": "warmup-route-choice",
+                    "answer": "Пример → повтор → маленькая практика",
+                },
+            )
+        repaired = client.get("/api/practice/session?mode=review").json()
+        assert repaired["title"] == "Чистое повторение"
+
         module_session = client.get(
             "/api/practice/session?mode=module&module_id=gentle-start"
         ).json()
@@ -153,6 +178,66 @@ def test_practice_sessions_are_guided_and_repeat_errors() -> None:
             "Как проходить урок"
         }
         client.post("/api/reset")
+
+
+def test_lesson_cannot_pass_by_skipping_mandatory_code() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        response = client.post(
+            "/api/lessons/warmup-route/submit",
+            json={
+                "answers": [
+                    {
+                        "question_id": "warmup-route-choice",
+                        "answer": "Пример → повтор → маленькая практика",
+                    },
+                    {"question_id": "warmup-route-term", "answer": "print"},
+                    {"question_id": "warmup-route-code", "answer": ""},
+                ]
+            },
+        ).json()
+        assert response["correct_count"] == 2
+        assert response["mandatory_passed"] is False
+        assert response["passed"] is False
+
+
+def test_exam_requires_practical_questions_even_above_score_threshold() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        for lesson in (item for item in LESSONS if item["module_id"] == "start"):
+            total = len(lesson["questions"])
+            save_lesson(lesson["id"], total, total, lesson["xp"])
+
+        exam = EXAMS["start"]
+        answers = []
+        for question_id in exam["question_ids"]:
+            question = QUESTION_BY_ID[question_id]
+            if question["kind"] == "choice":
+                answer = question["answer"]
+            elif question["kind"] == "input":
+                answer = question["answers"][0]
+            elif question_id == "var-code":
+                answer = "city = 'Казань'\nprint(f'Город: {city}')\n"
+            else:
+                answer = ""
+            answers.append({"question_id": question_id, "answer": answer})
+
+        result = client.post("/api/exams/start/submit", json={"answers": answers}).json()
+        assert result["correct_count"] == 5
+        assert result["mandatory_passed"] is False
+        assert result["passed"] is False
+
+
+def test_module_practice_interleaves_completed_lessons() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        for lesson in LESSONS[:3]:
+            total = len(lesson["questions"])
+            save_lesson(lesson["id"], total, total, lesson["xp"])
+        session = client.get(
+            "/api/practice/session?mode=module&module_id=gentle-start&limit=6"
+        ).json()
+        assert len({question["lesson_title"] for question in session["questions"]}) > 1
 
 
 def test_legacy_progress_continues_past_new_gentle_start() -> None:
