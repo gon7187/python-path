@@ -2,5 +2,10 @@
 __pycache__/
 .pytest_cache/
 .ruff_cache/
-python_path.db
+python_path.db*
 *.pyc
+graphify-out/.graphify_*
+graphify-out/cache/
+graphify-out/cost.json
+graphify-out/manifest.json
+graphify-out/memory/
