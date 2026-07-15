@@ -7,7 +7,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
+
+from .advanced_practice import build_topical_code_task
 
 
 def _theory(
@@ -16,15 +19,21 @@ def _theory(
     example: str,
     tip: str = "",
     language: str = "python",
-) -> dict[str, str]:
+    output: str | None = None,
+    example_status: str = "fragment",
+) -> dict[str, Any]:
     """Собрать карточку теории и явно пометить язык примера."""
-    return {
+    card: dict[str, Any] = {
         "title": title,
         "text": text,
         "example": example,
         "tip": tip,
         "language": language,
+        "example_status": example_status,
     }
+    if output is not None:
+        card["output"] = output
+    return card
 
 
 def _code_task(kind: str) -> dict[str, Any]:
@@ -38,6 +47,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "increment(9)", "expected": 10},
             ],
             "hint": "Верни value + 1.",
+            "tool_ids": ["return", "arithmetic"],
         },
         "discount": {
             "prompt": "Напиши `discount(price)`, которая возвращает цену со скидкой 10%.",
@@ -47,6 +57,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "discount(50)", "expected": 45.0},
             ],
             "hint": "Умножь цену на 0.9.",
+            "tool_ids": ["return", "multiply"],
         },
         "normalize": {
             "prompt": "Напиши `normalize(text)`, которая убирает пробелы по краям и приводит текст к нижнему регистру.",
@@ -56,6 +67,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "normalize(' УЖЕ ')", "expected": "уже"},
             ],
             "hint": "Соедини методы strip() и lower().",
+            "tool_ids": ["strip", "lower", "return"],
         },
         "reverse": {
             "prompt": "Напиши `reverse_text(text)`, которая возвращает строку в обратном порядке.",
@@ -65,6 +77,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "reverse_text('a')", "expected": "a"},
             ],
             "hint": "Срез с шагом -1 разворачивает последовательность.",
+            "tool_ids": ["slice", "return"],
         },
         "even": {
             "prompt": "Напиши `is_even(number)`, которая возвращает True только для чётных чисел.",
@@ -74,6 +87,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "is_even(7)", "expected": False},
             ],
             "hint": "Остаток от деления на 2 у чётного числа равен 0.",
+            "tool_ids": ["modulo", "comparison", "return"],
         },
         "clamp": {
             "prompt": "Напиши `clamp(value)`: верни число, ограниченное диапазоном от 0 до 100.",
@@ -84,6 +98,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "clamp(120)", "expected": 100},
             ],
             "hint": "Сначала проверь значение ниже 0, затем значение выше 100; в остальных случаях верни само value.",
+            "tool_ids": ["if", "comparison", "return"],
         },
         "sum_items": {
             "prompt": "Напиши `sum_items(items)`, которая возвращает сумму чисел списка.",
@@ -93,6 +108,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "sum_items([])", "expected": 0},
             ],
             "hint": "Можно применить sum() или накопитель в цикле.",
+            "tool_ids": ["sum", "return"],
         },
         "count_positive": {
             "prompt": "Напиши `count_positive(items)`, которая считает положительные числа в списке.",
@@ -102,6 +118,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "count_positive([-3, 0])", "expected": 0},
             ],
             "hint": "Заведи счётчик и увеличивай его, если value > 0.",
+            "tool_ids": ["for", "if", "plus-equals", "return"],
         },
         "last": {
             "prompt": "Напиши `last_or_none(items)`: верни последний элемент или None для пустого списка.",
@@ -111,6 +128,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "last_or_none([])", "expected": None},
             ],
             "hint": "Сначала проверь, что список не пустой; последний индекс — -1.",
+            "tool_ids": ["if", "index", "none", "return"],
         },
         "unique": {
             "prompt": "Напиши `unique_count(items)`, которая возвращает количество уникальных значений.",
@@ -120,6 +138,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "unique_count([])", "expected": 0},
             ],
             "hint": "Множество set убирает дубликаты.",
+            "tool_ids": ["set", "len", "return"],
         },
         "lookup": {
             "prompt": "Напиши `get_title(record)`: верни поле title или строку `Без названия`, если ключа нет.",
@@ -129,6 +148,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "get_title({})", "expected": "Без названия"},
             ],
             "hint": "Используй get с запасным значением.",
+            "tool_ids": ["get", "return"],
         },
         "label": {
             "prompt": "Напиши `make_label(name, level)`, возвращающую строку `<name> · уровень <level>`.",
@@ -138,6 +158,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "make_label('Лев', 5)", "expected": "Лев · уровень 5"},
             ],
             "hint": "f-строка поможет собрать текст.",
+            "tool_ids": ["f-string", "return"],
         },
         "divide": {
             "prompt": "Напиши `safe_divide(left, right)`: при делении на ноль верни None, иначе — частное.",
@@ -147,6 +168,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "safe_divide(8, 0)", "expected": None},
             ],
             "hint": "Проверь right == 0 до операции деления.",
+            "tool_ids": ["if", "comparison", "division", "none", "return"],
         },
         "pair": {
             "prompt": "Напиши `pair_sum(pair)`, которая возвращает сумму двух элементов кортежа.",
@@ -156,6 +178,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 {"kind": "call", "call": "pair_sum((-2, 2))", "expected": 0},
             ],
             "hint": "Обратись к индексам 0 и 1 или распакуй кортеж.",
+            "tool_ids": ["tuple", "index", "arithmetic", "return"],
         },
         "tag": {
             "prompt": "Напиши `tag(value)`, которая возвращает словарь `{'value': value, 'ready': True}`.",
@@ -173,6 +196,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 },
             ],
             "hint": "Создай словарь с двумя парами ключ — значение.",
+            "tool_ids": ["dict", "bool", "return"],
         },
         "badge": {
             "prompt": "Создай класс Badge с методом label(self, name), возвращающим `Награда: <name>`.",
@@ -190,6 +214,7 @@ def _code_task(kind: str) -> dict[str, Any]:
                 },
             ],
             "hint": "Метод должен вернуть f-строку; self уже передан первым параметром.",
+            "tool_ids": ["class", "parameter", "f-string", "return"],
         },
     }
     task = tasks[kind]
@@ -1321,7 +1346,7 @@ COURSE_UNITS = [
                 "Задачи",
                 "Запускаем несколько корутин",
                 "asyncio.create_task",
-                "task = asyncio.create_task(fetch())",
+                "async def fetch():\n    return 'данные'\n\nasync def start():\n    task = asyncio.create_task(fetch())\n    return await task",
                 "Task регистрирует корутину в цикле событий, чтобы она могла выполняться конкурентно.",
                 "Сохраняй ссылку на созданную задачу и дожидайся её.",
             ),
@@ -1415,7 +1440,7 @@ TASK_ORDER = (
 # Tasks without an entry rely solely on the completed foundation path.
 TASK_REQUIREMENT_LESSON = {
     "even": "operators-integer-division",
-    "reverse": "strings-pro-indexes",
+    "reverse": "tuples-slices-slices",
     "pair": "tuples-slices-tuples",
     "last": "lists-pro-stacks-queues",
     "badge": "oop-design-init",
@@ -1476,31 +1501,378 @@ NON_PYTHON_EXAMPLES = {
 }
 
 
+# По одному полностью запускаемому worked example почти в каждом программируемом
+# модуле. Остальные короткие листинги честно маркируются как фрагменты ниже.
+WORKED_EXAMPLES: dict[tuple[str, str], tuple[str, str]] = {
+    ("operators", "arithmetic"): (
+        "price = 120\ncount = 3\ntotal = price * count\nprint(total)",
+        "360",
+    ),
+    ("strings-pro", "indexes"): ("code = 'python'\nprint(code[1:4])", "yth"),
+    ("tuples-slices", "tuples"): ("point = (10, 20)\nprint(point)", "(10, 20)"),
+    ("lists-pro", "list-methods"): (
+        "tasks = ['код']\ntasks.append('тесты')\nprint(tasks)",
+        "['код', 'тесты']",
+    ),
+    ("mappings", "dict-basics"): (
+        "user = {'name': 'Лена'}\nname = user.get('name')\nprint(name)",
+        "Лена",
+    ),
+    ("flow-advanced", "elif"): (
+        "score = 75\nif score >= 90:\n    grade = 'A'\nelif score >= 70:\n    grade = 'B'\nelse:\n    grade = 'C'\nprint(grade)",
+        "B",
+    ),
+    ("functions-pro", "parameters"): (
+        "def move(x, y):\n    return x, y\n\nprint(move(3, 7))",
+        "(3, 7)",
+    ),
+    ("scope", "legb"): (
+        "name = 'глобально'\ndef show():\n    name = 'локально'\n    return name\n\nprint(show())\nprint(name)",
+        "локально\nглобально",
+    ),
+    ("comprehensions", "list-comprehension"): (
+        "numbers = [1, 2, 3]\nsquares = [n * n for n in numbers]\nprint(squares)",
+        "[1, 4, 9]",
+    ),
+    ("iterators", "iterable"): (
+        "iterator = iter([10, 20])\nprint(next(iterator))\nprint(next(iterator))",
+        "10\n20",
+    ),
+    ("modules", "imports"): ("import math\nprint(math.sqrt(9))", "3.0"),
+    ("files-data", "pathlib"): (
+        "from pathlib import Path\npath = Path('notes') / 'today.txt'\nprint(path.as_posix())",
+        "notes/today.txt",
+    ),
+    ("errors-debug", "exception-types"): (
+        "try:\n    int('abc')\nexcept ValueError:\n    print('Получен ValueError')",
+        "Получен ValueError",
+    ),
+    ("oop-design", "init"): (
+        "class Task:\n    def __init__(self, title):\n        self.title = title\n\ntask = Task('Код')\nprint(task.title)",
+        "Код",
+    ),
+    ("oop-advanced", "inheritance"): (
+        "class Task:\n    def __init__(self, title):\n        self.title = title\n\nclass TimedTask(Task):\n    def __init__(self, title, minutes):\n        super().__init__(title)\n        self.minutes = minutes\n\nprint(TimedTask('Код', 25).minutes)",
+        "25",
+    ),
+    ("typing-models", "annotations"): (
+        "def total(values: list[int]) -> int:\n    return sum(values)\n\nprint(total([2, 3]))",
+        "5",
+    ),
+    ("stdlib-core", "datetime"): (
+        "from datetime import date, timedelta\ntoday = date(2026, 7, 15)\ndeadline = today + timedelta(days=7)\nprint(deadline)",
+        "2026-07-22",
+    ),
+    ("stdlib-productivity", "collections"): (
+        "from collections import Counter\ncounts = Counter(['код', 'тест', 'код'])\nprint(counts['код'])",
+        "2",
+    ),
+    ("regex", "patterns"): (
+        "import re\npattern = r'\\d{4}-\\d{2}-\\d{2}'\nprint(re.fullmatch(pattern, '2026-07-15') is not None)",
+        "True",
+    ),
+    ("testing", "unit-tests"): (
+        "def discount(price):\n    return price * 0.9\n\nassert discount(100) == 90\nprint('Тест пройден')",
+        "Тест пройден",
+    ),
+    ("quality", "pep8"): (
+        "scores = [3, 7]\ntotal_score = sum(scores)\nprint(total_score)",
+        "10",
+    ),
+    ("concurrency", "threads-processes"): (
+        "def worker_kind(task_kind):\n    if task_kind == 'io':\n        return 'threads'\n    return 'processes'\n\nprint(worker_kind('io'))",
+        "threads",
+    ),
+    ("async", "coroutines"): (
+        "import asyncio\n\nasync def fetch():\n    await asyncio.sleep(0)\n    return 'готово'\n\nprint(asyncio.run(fetch()))",
+        "готово",
+    ),
+    ("async", "tasks"): (
+        "import asyncio\n\nasync def fetch():\n    await asyncio.sleep(0)\n    return 'данные'\n\nasync def main():\n    task = asyncio.create_task(fetch())\n    print(await task)\n\nasyncio.run(main())",
+        "данные",
+    ),
+    ("async", "gather-timeouts"): (
+        "import asyncio\n\nasync def double(value):\n    await asyncio.sleep(0)\n    return value * 2\n\nasync def main():\n    results = await asyncio.gather(double(2), double(3))\n    print(results)\n\nasyncio.run(main())",
+        "[4, 6]",
+    ),
+    ("capstones", "task-manager"): (
+        "task = {'title': 'Купить хлеб', 'done': False}\ntask['done'] = True\nprint(task)",
+        "{'title': 'Купить хлеб', 'done': True}",
+    ),
+}
+
+
+# Контекст дополняет короткий авторский пример входными данными и наблюдаемым
+# результатом. Так карточка остаётся про исходную конструкцию, а не подменяется
+# готовым решением следующего задания.
+EXAMPLE_CONTEXTS: dict[tuple[str, str], tuple[str, str, str]] = {
+    ("operators", "booleans"): (
+        "age = 20\nhas_ticket = True",
+        "print(can_enter)",
+        "True",
+    ),
+    ("strings-pro", "search-replace"): (
+        "text = '10,50'",
+        "print(clean)",
+        "10.50",
+    ),
+    ("strings-pro", "formatting"): ("score = 42", "", "   42 XP"),
+    ("tuples-slices", "unpacking"): (
+        "point = (10, 20)",
+        "print(x, y)",
+        "10 20",
+    ),
+    ("tuples-slices", "slices"): (
+        "values = [0, 1, 2, 3, 4]",
+        "print(every_second)",
+        "[0, 2, 4]",
+    ),
+    ("tuples-slices", "zip-enumerate"): (
+        "names = ['Аня', 'Лев']",
+        "",
+        "1 Аня\n2 Лев",
+    ),
+    ("lists-pro", "sorting"): (
+        "scores = [3, 1, 5]",
+        "print(ordered)",
+        "[5, 3, 1]",
+    ),
+    ("lists-pro", "stacks-queues"): (
+        "stack = ['первая']",
+        "print(stack)",
+        "['первая']",
+    ),
+    ("lists-pro", "mutation"): (
+        "items = [2, -1, -3, 4]",
+        "print(items)",
+        "[2, 4]",
+    ),
+    ("mappings", "dict-loops"): (
+        "settings = {'theme': 'dark', 'size': 2}",
+        "",
+        "theme dark\nsize 2",
+    ),
+    ("mappings", "dict-merge"): (
+        "defaults = {'theme': 'light', 'size': 1}\noverrides = {'theme': 'dark'}",
+        "print(config)",
+        "{'theme': 'dark', 'size': 1}",
+    ),
+    ("mappings", "sets"): (
+        "backend = {'python', 'sql'}\npython_team = {'python', 'git'}",
+        "print(sorted(common))",
+        "['python']",
+    ),
+    ("flow-advanced", "match"): (
+        "command = 'start'",
+        "",
+        "Поехали",
+    ),
+    ("flow-advanced", "break-continue"): (
+        "values = [-1, 0, 2]",
+        "print('Цикл завершён')",
+        "Цикл завершён",
+    ),
+    ("flow-advanced", "loop-else"): (
+        "items = ['a', 'b']\ntarget = 'x'",
+        "",
+        "Не найдено",
+    ),
+    ("functions-pro", "keyword-args"): (
+        "def connect(host, timeout):\n    return f'{host}:{timeout}'",
+        "print(connect(host='localhost', timeout=3))",
+        "localhost:3",
+    ),
+    ("scope", "lambda-key"): (
+        "users = [{'name': 'Лев', 'age': 30}, {'name': 'Аня', 'age': 18}]",
+        "names = []\nfor user in users:\n    names.append(user['name'])\nprint(names)",
+        "['Аня', 'Лев']",
+    ),
+    ("comprehensions", "comprehension-filter"): (
+        "numbers = [1, 2, 3, 4]",
+        "print(evens)",
+        "[2, 4]",
+    ),
+    ("comprehensions", "dict-comprehension"): (
+        "words = ['кот', 'python']",
+        "print(lengths)",
+        "{'кот': 3, 'python': 6}",
+    ),
+    ("comprehensions", "nested-comprehension"): (
+        "xs = [1, 2]\nys = ['a']",
+        "print(pairs)",
+        "[(1, 'a'), (2, 'a')]",
+    ),
+    ("iterators", "stop-iteration"): (
+        "iterator = iter([10, 20])",
+        "print('Итератор исчерпан')",
+        "10\n20\nИтератор исчерпан",
+    ),
+    ("iterators", "generator-expression"): (
+        "numbers = [1, 2, 3]",
+        "print(total)",
+        "14",
+    ),
+    ("files-data", "text-files"): (
+        "with open('note.txt', 'w', encoding='utf-8') as output_file:\n    output_file.write('Привет')",
+        "print(text)",
+        "Привет",
+    ),
+    ("errors-debug", "raise"): ("age = 18", "print(age)", "18"),
+    ("errors-debug", "finally"): ("text = 'abc'", "print(value)", "Готово\n0"),
+    ("errors-debug", "debugging"): ("value = 42", "", "value=42"),
+    ("oop-design", "composition"): (
+        "class Task:\n    def __init__(self, title):\n        self.title = title\n\nclass Project:\n    def __init__(self):\n        self.tasks = []\n\nproject = Project()\ntask = Task('Код')",
+        "print(project.tasks[0].title)",
+        "Код",
+    ),
+    ("oop-advanced", "protocols"): (
+        "collection = ['a', 'b']",
+        "",
+        "a\nb",
+    ),
+    ("typing-models", "dataclasses-enums"): (
+        "from dataclasses import dataclass",
+        "print(User('Аня'))",
+        "User(name='Аня')",
+    ),
+    ("stdlib-core", "random"): (
+        "import random\nrandom.seed(1)\noptions = ['python', 'sql']",
+        "print(choice)",
+        "python",
+    ),
+    ("stdlib-core", "math-statistics"): (
+        "import statistics\nscores = [2, 4, 6]",
+        "print(average)",
+        "4",
+    ),
+    ("stdlib-core", "decimal"): (
+        "from decimal import Decimal",
+        "print(price)",
+        "19.90",
+    ),
+    ("stdlib-productivity", "itertools"): (
+        "import itertools\nitems = ['a', 'b', 'c']",
+        "print(list(pairs))",
+        "[('a', 'b'), ('a', 'c'), ('b', 'c')]",
+    ),
+    ("stdlib-productivity", "functools"): (
+        "from functools import lru_cache",
+        "print(fib(5))",
+        "5",
+    ),
+    ("stdlib-productivity", "heapq-bisect"): (
+        "import heapq\nqueue = []\npriority = 2\ntask = 'тесты'",
+        "print(queue)",
+        "[(2, 'тесты')]",
+    ),
+    ("regex", "validation"): (
+        "import re\npostal_code = '123456'",
+        "print(re.fullmatch(r'\\d{6}', postal_code) is not None)",
+        "True",
+    ),
+    ("regex", "substitution"): (
+        "import re\ntext = 'Python   каждый день'",
+        "print(clean)",
+        "Python каждый день",
+    ),
+    ("testing", "fixtures"): (
+        "class User:\n    def __init__(self):\n        self.level = 1\n\n    def level_up(self):\n        self.level += 1\n        return self.level\n\ndef make_user():\n    return User()",
+        "print(result)",
+        "2",
+    ),
+    ("testing", "mocks"): (
+        "class FakeClock:\n    def __init__(self, value):\n        self.value = value\n\n    def today(self):\n        return self.value",
+        "print(clock.today())",
+        "2026-01-01",
+    ),
+    ("databases", "parameters"): (
+        "class Cursor:\n    def execute(self, sql, params):\n        self.sql = sql\n        self.params = params\n\ncursor = Cursor()\ntask_id = 7",
+        "print(cursor.sql)\nprint(cursor.params)",
+        "SELECT * FROM tasks WHERE id = ?\n(7,)",
+    ),
+    ("concurrency", "thread-pool"): (
+        "from concurrent.futures import ThreadPoolExecutor\n\ndef fetch(url):\n    return url.upper()\n\nurls = ['a', 'b']",
+        "print(results)",
+        "['A', 'B']",
+    ),
+    ("concurrency", "locks"): (
+        "from threading import Lock\nlock = Lock()\nbalance = 100\namount = 5",
+        "print(balance)",
+        "105",
+    ),
+    ("concurrency", "queues"): (
+        "from queue import Queue\nqueue = Queue()\njob = 'код'",
+        "print(job)",
+        "код",
+    ),
+}
+
+
 def _example_language(module_id: str, slug: str) -> str:
     return NON_PYTHON_EXAMPLES.get((module_id, slug), "python")
 
 
-def _parsons_data(lesson_id: str, example: str) -> tuple[str, list[dict[str, str]], list[str]]:
+def _parsons_data(
+    lesson_id: str,
+    example: str,
+    *,
+    subtitle: str,
+    keyword: str,
+    advice: str,
+) -> tuple[str, list[dict[str, str]], list[str]]:
     """Превратить пример в маленькую задачу на восстановление порядка."""
-    example_lines = example.splitlines()
+    example_lines = [line for line in example.splitlines() if line.strip()]
     if len(example_lines) > 1:
         prompt = "Собери строки примера в правильном порядке. Отступы уже сохранены."
         ordered_lines = example_lines
     else:
-        prompt = "Расположи шаги разбора примера в безопасном порядке."
-        ordered_lines = [
-            "Определи, какие входные значения нужны строке.",
-            example,
-            "Предскажи значение результата до проверки.",
-            "Измени одно входное значение и проверь новый прогноз.",
+        prompt = "Собери тематическую цепочку: от цели до самопроверки."
+        topical_sequences = [
+            [
+                f"Задача — {subtitle}",
+                f"Подходящий инструмент — {keyword}",
+                f"Применение — {example}",
+                f"Проверка результата — {advice}",
+            ],
+            [
+                f"Желаемый результат — {subtitle}",
+                f"Правило для выбора — {keyword}",
+                f"Мини-пример — {example}",
+                f"Граничный вопрос — {advice}",
+            ],
+            [
+                f"Контекст — {subtitle}",
+                f"Новая операция — {keyword}",
+                f"Код или формат — {example}",
+                f"Объяснение своими словами — {advice}",
+            ],
+            [
+                f"Что требуется — {subtitle}",
+                "Что уже известно — вход и ожидаемый результат",
+                f"Какой приём связал их — {keyword}; {example}",
+                f"Как убедиться — {advice}",
+            ],
         ]
+        sequence_index = int(hashlib.sha256(lesson_id.encode()).hexdigest(), 16) % len(
+            topical_sequences
+        )
+        ordered_lines = topical_sequences[sequence_index]
 
-    ordered_blocks = [
-        {"id": f"{lesson_id}-block-{index}", "text": line}
-        for index, line in enumerate(ordered_lines, start=1)
-    ]
-    # Не используем random: одинаковый урок всегда должен открываться одинаково.
-    scrambled_blocks = ordered_blocks[1::2] + ordered_blocks[::2]
+    occurrences: dict[str, int] = {}
+    ordered_blocks = []
+    for line in ordered_lines:
+        occurrences[line] = occurrences.get(line, 0) + 1
+        fingerprint = hashlib.sha256(
+            f"{lesson_id}\0{line}\0{occurrences[line]}".encode()
+        ).hexdigest()[:12]
+        ordered_blocks.append({"id": f"{lesson_id}-block-h{fingerprint}", "text": line})
+    # Детерминированный hash даёт разную перестановку по урокам без flaky-тестов.
+    scrambled_blocks = sorted(
+        ordered_blocks,
+        key=lambda block: hashlib.sha256(
+            f"{lesson_id}\0scramble\0{block['id']}".encode()
+        ).hexdigest(),
+    )
     if [block["id"] for block in scrambled_blocks] == [block["id"] for block in ordered_blocks]:
         scrambled_blocks = list(reversed(ordered_blocks))
     answer = [block["id"] for block in ordered_blocks]
@@ -1510,16 +1882,49 @@ def _parsons_data(lesson_id: str, example: str) -> tuple[str, list[dict[str, str
 def _lesson_theory(
     module_id: str,
     spec: tuple[str, str, str, str, str, str, str],
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     slug, title, subtitle, keyword, example, concept, advice = spec
     language = _example_language(module_id, slug)
+    worked_example = WORKED_EXAMPLES.get((module_id, slug))
+    contextual_example = EXAMPLE_CONTEXTS.get((module_id, slug))
+    if worked_example:
+        shown_example, output = worked_example
+        first_text = (
+            f"{concept} Ниже — самодостаточный пример: все входные данные объявлены, "
+            "а ожидаемый вывод указан сразу под кодом."
+        )
+        example_status = "self-contained"
+    elif contextual_example:
+        prelude, postlude, output = contextual_example
+        shown_example = "\n".join(part for part in (prelude, example, postlude) if part)
+        first_text = (
+            f"{concept} Короткий фрагмент дополнен конкретными входными данными и выводом, "
+            "поэтому его можно целиком запустить и изменить для эксперимента."
+        )
+        example_status = "self-contained"
+    elif language == "python":
+        shown_example, output = example, ""
+        first_text = (
+            f"{concept} Это самодостаточное определение или присваивание: код запускается "
+            "без ошибки, но ничего не печатает, потому что в нём нет вызова print."
+        )
+        example_status = "self-contained"
+    else:
+        shown_example, output = example, None
+        first_text = (
+            f"{concept} Это пример формата «{language}», а не Python-код для запуска "
+            "в редакторе. Он показывает контракт или структуру данных."
+        )
+        example_status = "format-example"
     return [
         _theory(
             "Одна новая идея",
-            concept,
-            example,
+            first_text,
+            shown_example,
             f"Сейчас достаточно понять один ориентир: {keyword}.",
             language,
+            output,
+            example_status,
         ),
         _theory(
             "Сначала предскажи",
@@ -1566,17 +1971,103 @@ def _lesson_theory(
     ]
 
 
+CALLABLE_TERM_KEYWORDS = {
+    "Counter",
+    "Decimal",
+    "Lock",
+    "Path",
+    "Queue",
+    "StopIteration",
+    "ThreadPoolExecutor",
+    "ValueError",
+    "__init__",
+    "__len__",
+    "__repr__",
+    "dataclass",
+    "enumerate",
+    "fullmatch",
+    "lru_cache",
+    "sorted",
+    "super",
+    "timedelta",
+}
+METHOD_TERM_KEYWORDS = {"append"}
+
+
+def _term_answers(keyword: str) -> list[str]:
+    """Принять естественные записи термина, не создавая форм вроде ``elif()``."""
+    raw = keyword.strip()
+    lowered = raw.lower()
+    answers = {raw}
+
+    if lowered.startswith("метод "):
+        base = raw[len("метод ") :].strip()
+        answers.update({base, f"{base}()", f".{base}()", f"метод {base}"})
+    elif lowered.startswith("оператор "):
+        base = raw[len("оператор ") :].strip()
+        answers.add(base)
+    elif raw in METHOD_TERM_KEYWORDS:
+        answers.update({f"{raw}()", f".{raw}()", f"метод {raw}"})
+    elif raw in CALLABLE_TERM_KEYWORDS:
+        answers.add(f"{raw}()")
+
+    dotted_callables = {"asyncio.create_task", "asyncio.gather", "re.sub", "statistics.mean"}
+    dotted_parts = raw.split(".")
+    if raw in dotted_callables and all(part.isidentifier() for part in dotted_parts):
+        leaf = dotted_parts[-1]
+        answers.update({f"{raw}()", leaf, f"{leaf}()"})
+
+    aliases = {
+        "**kwargs": {"kwargs"},
+        "@property": {"property"},
+        "dict[str, int]": {"dict[str,int]"},
+        "PEP 8": {"PEP8"},
+        "pyproject.toml": {"pyproject"},
+    }
+    answers.update(aliases.get(raw, set()))
+    return sorted(answers)
+
+
+def _thinking_help(_title: str) -> list[dict[str, str]]:
+    """Опора для распознавания без копии ответа или правильного примера."""
+    return [
+        {
+            "name": "Как рассуждать",
+            "kind": "Стратегия до ответа",
+            "signature": "вход → действие → результат",
+            "description": (
+                "Сначала назови требуемое действие своими словами, затем проверь, какой "
+                "вариант действительно меняет данные нужным способом."
+            ),
+            "example": "Сравни назначение операций; точное имя инструмента восстанови сам.",
+            "language": "text",
+        }
+    ]
+
+
 def _make_questions(
     lesson_id: str,
     module_id: str,
     lesson_spec: tuple[str, str, str, str, str, str, str],
-    task_kind: str,
 ) -> list[dict[str, Any]]:
-    slug, title, subtitle, keyword, example, concept, _ = lesson_spec
-    code_task = _code_task(task_kind)
-    parsons_prompt, parsons_blocks, parsons_answer = _parsons_data(lesson_id, example)
+    slug, title, subtitle, keyword, example, concept, advice = lesson_spec
+    code_task = build_topical_code_task(module_id, lesson_spec)
+    parsons_example = example
+    if (worked_example := WORKED_EXAMPLES.get((module_id, slug))) is not None:
+        parsons_example = worked_example[0]
+    elif (context := EXAMPLE_CONTEXTS.get((module_id, slug))) is not None:
+        prelude, postlude, _ = context
+        parsons_example = "\n".join(part for part in (prelude, example, postlude) if part)
+    parsons_prompt, parsons_blocks, parsons_answer = _parsons_data(
+        lesson_id,
+        parsons_example,
+        subtitle=subtitle,
+        keyword=keyword,
+        advice=advice,
+    )
     topical_concepts = [keyword]
-    review_concepts = TASK_CONCEPTS[task_kind]
+    language = _example_language(module_id, slug)
+    thinking_help = _thinking_help(title)
     distractor_start = sum(ord(symbol) for symbol in lesson_id) % len(FOUNDATION_DISTRACTORS)
     distractors = [
         FOUNDATION_DISTRACTORS[(distractor_start + offset) % len(FOUNDATION_DISTRACTORS)]
@@ -1600,12 +2091,13 @@ def _make_questions(
             "focus_concepts": topical_concepts,
             "review_concepts": [],
             "mandatory": False,
+            "tool_help": thinking_help,
         },
         {
             "id": f"{lesson_id}-term",
             "kind": "input",
             "prompt": f"Какой ключевой инструмент или термин связывает урок «{title}»?",
-            "answers": [keyword],
+            "answers": _term_answers(keyword),
             "placeholder": "Ответь коротким термином",
             "explanation": f"Ключевой ориентир урока — «{keyword}». {subtitle}.",
             "guide": (
@@ -1617,6 +2109,7 @@ def _make_questions(
             "focus_concepts": topical_concepts,
             "review_concepts": [],
             "mandatory": False,
+            "tool_help": thinking_help,
         },
         {
             "id": f"{lesson_id}-parsons",
@@ -1632,26 +2125,17 @@ def _make_questions(
                 "Найди строку, которой нужны уже подготовленные данные. Она не может стоять раньше "
                 "их появления. Для вложенного кода дополнительно смотри на сохранённые отступы."
             ),
-            "language": _example_language(module_id, slug),
+            "language": language,
             "purpose": "ordering_and_tracing",
             "focus_concepts": topical_concepts,
             "review_concepts": [],
             "mandatory": True,
+            "tool_help": thinking_help,
         },
         {
             "id": f"{lesson_id}-code",
             "kind": "code",
             **code_task,
-            "prompt": f"🔁 Накопительное повторение. {code_task['prompt']}",
-            "guide": (
-                "Это отдельное повторение уже изученных основ, а не проверка новой темы урока. "
-                "Назови вход и ожидаемый выход, измени минимальную часть заготовки и сначала "
-                "проверь один простой случай. Подсказку открывай только после собственной попытки."
-            ),
-            "purpose": "spaced_retrieval",
-            "focus_concepts": review_concepts,
-            "review_concepts": review_concepts,
-            "mandatory": True,
         },
     ]
 
@@ -1664,11 +2148,7 @@ def build_extended_course() -> tuple[
     exams: dict[str, dict[str, Any]] = {}
     colors = ["sky", "violet", "sun", "mint"]
     order = 13
-    lesson_number = 0
     previous_lesson_id: str | None = None
-    completed_extended_lessons: set[str] = set()
-    task_counts = {task_kind: 0 for task_kind in TASK_ORDER}
-    last_task_kind: str | None = None
     for unit_index, unit in enumerate(COURSE_UNITS):
         module_id = unit["id"]
         modules.append(
@@ -1684,22 +2164,10 @@ def build_extended_course() -> tuple[
         for lesson_index, spec in enumerate(unit["lessons"]):
             slug, title, subtitle, keyword, example, concept, advice = spec
             lesson_id = f"{module_id}-{slug}"
-            eligible_tasks = [
-                task_kind
-                for task_kind in TASK_ORDER
-                if TASK_REQUIREMENT_LESSON.get(task_kind) in (None, *completed_extended_lessons)
-            ]
-            if len(eligible_tasks) > 1 and last_task_kind in eligible_tasks:
-                eligible_tasks.remove(last_task_kind)
-            task_kind = min(
-                eligible_tasks,
-                key=lambda item: (task_counts[item], TASK_ORDER.index(item)),
-            )
             questions = _make_questions(
                 lesson_id,
                 module_id,
                 spec,
-                task_kind,
             )
             lessons.append(
                 {
@@ -1712,7 +2180,7 @@ def build_extended_course() -> tuple[
                     "xp": 35 + (unit_index // 4) * 5,
                     "concepts": [keyword],
                     "prerequisites": [previous_lesson_id] if previous_lesson_id else [],
-                    "practices": TASK_CONCEPTS[task_kind],
+                    "practices": [keyword],
                     "difficulty": 2 + min(3, unit_index // 7),
                     "theory": _lesson_theory(module_id, spec),
                     "questions": questions,
@@ -1720,28 +2188,25 @@ def build_extended_course() -> tuple[
             )
             unit_questions.append(questions)
             previous_lesson_id = lesson_id
-            completed_extended_lessons.add(lesson_id)
-            task_counts[task_kind] += 1
-            last_task_kind = task_kind
-            lesson_number += 1
             order += 1
+        # Каждый из четырёх концептов проверяется собственным написанием кода.
+        # Дополнительный тип на тему сохраняет смешанный формат контрольной точки.
         question_ids = [
             unit_questions[0][0]["id"],
-            unit_questions[0][2]["id"],
-            unit_questions[1][0]["id"],
+            unit_questions[0][3]["id"],
+            unit_questions[1][1]["id"],
             unit_questions[1][3]["id"],
             unit_questions[2][2]["id"],
+            unit_questions[2][3]["id"],
+            unit_questions[3][0]["id"],
             unit_questions[3][3]["id"],
         ]
-        mandatory_question_ids = [
-            unit_questions[2][2]["id"],
-            unit_questions[3][3]["id"],
-        ]
+        mandatory_question_ids = [questions[3]["id"] for questions in unit_questions]
         exams[module_id] = {
             "title": f"Контрольная точка: {unit['title']}",
             "description": (
-                f"Шесть смешанных заданий по разделу «{unit['title']}»: распознавание, "
-                "восстановление порядка и накопительное написание кода."
+                f"Восемь смешанных заданий по разделу «{unit['title']}». Все четыре темы "
+                "нужно применить в коде; распознавание и восстановление порядка помогают повторить связи."
             ),
             "question_ids": question_ids,
             "mandatory_question_ids": mandatory_question_ids,

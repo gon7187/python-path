@@ -1042,6 +1042,7 @@ def _challenge(
     explanation: str,
     guide: str,
     hint: str,
+    test_inputs: list[str] | None = None,
 ) -> dict:
     question = _code(
         f"challenge-{lesson_id}",
@@ -1059,6 +1060,9 @@ def _challenge(
             "badge": "🔁 Вспомни и соедини",
         }
     )
+    if test_inputs is not None:
+        question["test_inputs"] = test_inputs
+        question["input_example"] = test_inputs
     return question
 
 
@@ -1110,6 +1114,7 @@ FOUNDATION_CHALLENGES: dict[str, dict] = {
         "input получил текст, strip очистил края, а f-строка собрала сообщение.",
         "В первой рабочей строке получи ответ с указанным приглашением и сразу очисти его. Во второй выведи f-строку с city.",
         "Результат input — строка, поэтому у него можно вызвать уже изученный метод очистки.",
+        ["  Казань  "],
     ),
     "conditions": _challenge(
         "conditions",

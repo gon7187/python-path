@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import ast
+import hashlib
+from copy import deepcopy
+
+from app.exam_transfer import EXAM_TRANSFER_TESTS
 from app.extended_curriculum import EXTRA_EXAMS, EXTRA_LESSONS, EXTRA_MODULES
 from app.foundation_expansion import (
     FOUNDATION_CHALLENGES,
@@ -9,7 +14,7 @@ from app.foundation_expansion import (
     FOUNDATION_REPLACEMENTS,
 )
 from app.gentle_start import GENTLE_START_EXAMS, GENTLE_START_LESSONS, GENTLE_START_MODULES
-from app.learning_design import enrich_curriculum
+from app.learning_design import enrich_curriculum, public_tool_help
 
 
 def theory(title: str, text: str, example: str, tip: str = "") -> dict:
@@ -887,8 +892,9 @@ def default_guide(question: dict) -> str:
     kind = question["kind"]
     if kind == "code":
         return (
-            "Работай маленькими шагами: 1) прочитай заготовку; 2) сделай только то, "
-            f"о чём просит задание; 3) нажми «Проверить код». {question['hint']}"
+            "Работай маленькими шагами: 1) назови вход и ожидаемый результат; "
+            "2) измени только один ближайший шаг; 3) запусти код; 4) сравни результат "
+            "с условием. Точную форму забытой функции можно открыть в справочнике."
         )
     if kind == "input":
         return "Ответ короткий. Найди ключевое слово или результат в примере выше и введи его без лишнего текста."
@@ -898,14 +904,14 @@ def default_guide(question: dict) -> str:
 def add_learning_scaffolds() -> None:
     """Добавляет повторяемый педагогический шаг ко всем урокам курса."""
     for item in LESSONS:
-        item["theory"].append(
-            theory(
-                "Перед практикой: не нужно угадывать",
-                "Посмотри на пример ещё раз. Выполняй задание по одному действию и проверяй код отдельно. Ошибка — это подсказка, а не оценка твоих способностей.",
-                "1. Прочитай задание\n2. Предскажи результат\n3. Измени один шаг\n4. Запусти и сравни",
-                "Если застрял, открой подсказку и измени в примере только одну часть.",
-            )
+        practice_card = theory(
+            "Перед практикой: не нужно угадывать",
+            "Посмотри на пример ещё раз. Выполняй задание по одному действию и проверяй код отдельно. Ошибка — это подсказка, а не оценка твоих способностей.",
+            "1. Прочитай задание\n2. Предскажи результат\n3. Измени один шаг\n4. Запусти и сравни",
+            "Если застрял, открой подсказку и измени в примере только одну часть.",
         )
+        practice_card["language"] = "text"
+        item["theory"].append(practice_card)
         for question in item["questions"]:
             question.setdefault("guide", default_guide(question))
 
@@ -917,7 +923,7 @@ for lesson_order, item in enumerate(LESSONS, start=1):
 
 
 EXAMS = {
-    **GENTLE_START_EXAMS,
+    **deepcopy(GENTLE_START_EXAMS),
     "start": {
         "title": "Мини-экзамен: основы",
         "description": "Проверь, уверенно ли ты пишешь первые программы.",
@@ -944,7 +950,7 @@ EXAMS = {
             "class-code",
         ],
     },
-    **EXTRA_EXAMS,
+    **deepcopy(EXTRA_EXAMS),
 }
 
 
@@ -995,15 +1001,221 @@ def strengthen_foundation_exams() -> None:
 strengthen_foundation_exams()
 
 LESSON_BY_ID = {item["id"]: item for item in LESSONS}
-QUESTION_BY_ID = {question["id"]: question for item in LESSONS for question in item["questions"]}
+LESSON_QUESTION_BY_ID = {
+    question["id"]: question for item in LESSONS for question in item["questions"]
+}
+LESSON_ID_BY_QUESTION_ID = {
+    question["id"]: item["id"] for item in LESSONS for question in item["questions"]
+}
+EXAM_QUESTIONS: dict[str, dict] = {}
+EXAM_SOURCE_QUESTION_ID: dict[str, str] = {}
+EXAM_QUESTION_LESSON_ID: dict[str, str] = {}
+EXAM_MODULE_BY_QUESTION_ID: dict[str, str] = {}
+
+
+def _exam_starter(source_id: str, starter: str) -> str:
+    """Убрать учебные комментарии, оставив валидный каркас и сигнатуры."""
+    if source_id == "exception-code":
+        return (
+            "try:\n"
+            "    number = int('кот')\n"
+            "    print(number)\n"
+            "except ValueError:\n"
+            "    print('Замени этот текст')\n"
+        )
+    lines = [line for line in starter.splitlines() if not line.lstrip().startswith("#")]
+    candidate = "\n".join(lines).rstrip() + "\n"
+    try:
+        ast.parse(candidate)
+    except SyntaxError:
+        return starter
+    return candidate
+
+
+EXAM_INPUT_CUES: dict[str, dict[str, object]] = {
+    "class-init": {
+        "prompt": (
+            "Какое короткое английское имя переменной подходит объекту-награде, если "
+            "имя должно означать «значок»? Введи только имя."
+        )
+    },
+    "tuples-slices-unpacking-term": {
+        "prompt": (
+            "Как называется приём, когда `first, second = values` одним присваиванием "
+            "забирает элементы последовательности в несколько переменных?"
+        )
+    },
+    "flow-advanced-match-term": {
+        "prompt": (
+            "Какое ключевое слово начинает сопоставление одного значения с несколькими "
+            "шаблонами `case`?"
+        )
+    },
+    "errors-debug-raise-term": {
+        "prompt": (
+            "Какое ключевое слово вручную создаёт исключение, если данные не прошли проверку?"
+        )
+    },
+    "oop-design-repr-str-term": {
+        "prompt": (
+            "Какой dunder-метод должен вернуть техническое представление объекта для разработчика?"
+        )
+    },
+    "stdlib-productivity-itertools-term": {
+        "prompt": (
+            "Как называется модуль стандартной библиотеки с ленивыми комбинациями, "
+            "цепочками и бесконечными итераторами?"
+        )
+    },
+    "quality-format-lint-term": {
+        "prompt": (
+            "Как называется инструмент, который без запуска программы сообщает о "
+            "подозрительных местах и нарушениях стиля в коде?"
+        )
+    },
+    "http-api-json-api-term": {
+        "prompt": (
+            "Как называется текстовый формат обмена данными с объектами, массивами, "
+            "строками, числами и булевыми значениями, который часто использует API?"
+        )
+    },
+    "databases-crud-term": {
+        "prompt": (
+            "Какая английская аббревиатура объединяет создание, чтение, изменение и "
+            "удаление записей?"
+        )
+    },
+}
+
+
+def build_exam_variants() -> None:
+    """Создать отдельные assessment-карточки вместо повторной выдачи уроковых ID."""
+    for module_id, exam in EXAMS.items():
+        source_ids = list(exam["question_ids"])
+        source_mandatory = set(exam.get("mandatory_question_ids", ()))
+        variant_ids: list[str] = []
+        mandatory_variant_ids: list[str] = []
+
+        for source_id in source_ids:
+            source = LESSON_QUESTION_BY_ID[source_id]
+            variant = deepcopy(source)
+            variant_id = f"exam-{module_id}-{source_id}"
+            variant["id"] = variant_id
+            variant["prompt"] = f"Контрольный перенос. {source['prompt']}"
+            variant["purpose"] = "exam_retrieval"
+            variant["scaffold_level"] = "assessment"
+            variant["scaffold"] = "assessment"
+            variant["badge"] = "🏁 Контрольный перенос"
+            variant["review_concepts"] = list(source.get("review_concepts", ()))
+            variant["retrieves"] = list(source.get("retrieves", ()))
+            variant.pop("hint", None)
+            if variant["kind"] == "choice":
+                variant["prompt"] = (
+                    "Контрольное применение. "
+                    f"{source['prompt']} Выбери ответ и объясни себе, почему остальные "
+                    "варианты не подходят."
+                )
+            elif variant["kind"] == "input":
+                cue = EXAM_INPUT_CUES.get(source_id, {})
+                variant["prompt"] = (
+                    "Контрольное воспроизведение без списка вариантов. "
+                    f"{cue.get('prompt', source['prompt'])}"
+                )
+                if "answers" in cue:
+                    variant["answers"] = deepcopy(cue["answers"])
+            elif variant["kind"] == "parsons":
+                source_blocks = {block["id"]: block["text"] for block in source["blocks"]}
+                ordered_texts = [source_blocks[block_id] for block_id in source["answer"]]
+                ordered_blocks = [
+                    {
+                        "id": (
+                            f"{variant_id}-block-h"
+                            + hashlib.sha256(f"{variant_id}\0{text}\0{index}".encode()).hexdigest()[
+                                :12
+                            ]
+                        ),
+                        "text": text,
+                    }
+                    for index, text in enumerate(ordered_texts)
+                ]
+                variant["answer"] = [block["id"] for block in ordered_blocks]
+                variant["blocks"] = sorted(
+                    ordered_blocks,
+                    key=lambda block: hashlib.sha256(
+                        f"{variant_id}\0exam-scramble\0{block['id']}".encode()
+                    ).hexdigest(),
+                )
+                if variant["blocks"] == ordered_blocks:
+                    variant["blocks"] = list(reversed(ordered_blocks))
+            if variant["kind"] == "code":
+                variant["purpose"] = "exam_transfer"
+                # На экзамене оцениваем поведение, а не совпадение с авторской
+                # формой решения. Сохраняем поведенческие lesson-сценарии,
+                # отбрасываем проверки исходного текста/AST и добавляем новый
+                # transfer-сценарий, которого ученик раньше не видел.
+                variant["tests"] = [
+                    deepcopy(test)
+                    for test in source["tests"]
+                    if test.get("kind") not in {"source", "ast"}
+                ] + deepcopy(EXAM_TRANSFER_TESTS[source_id])
+                variant["starter"] = _exam_starter(source_id, variant["starter"])
+                variant["guide"] = (
+                    "Сначала восстанови алгоритм без почти готового ответа. Раздели вход, "
+                    "преобразование и результат; затем проверь решение на другом мысленном входе."
+                )
+                variant["hints"] = [
+                    "Назови три шага решения своими словами и реализуй только первый из них.",
+                    "Если забыл точное имя уже изученной функции или метода, открой справочник "
+                    "инструментов; готового решения в экзамене нет.",
+                ]
+
+            EXAM_QUESTIONS[variant_id] = variant
+            EXAM_SOURCE_QUESTION_ID[variant_id] = source_id
+            EXAM_QUESTION_LESSON_ID[variant_id] = LESSON_ID_BY_QUESTION_ID[source_id]
+            EXAM_MODULE_BY_QUESTION_ID[variant_id] = module_id
+            variant_ids.append(variant_id)
+            if source_id in source_mandatory:
+                mandatory_variant_ids.append(variant_id)
+
+        exam["source_question_ids"] = source_ids
+        exam["source_mandatory_question_ids"] = [
+            source_id for source_id in source_ids if source_id in source_mandatory
+        ]
+        exam["question_ids"] = variant_ids
+        exam["mandatory_question_ids"] = mandatory_variant_ids
+
+
+build_exam_variants()
+
+QUESTION_BY_ID = {**LESSON_QUESTION_BY_ID, **EXAM_QUESTIONS}
 
 
 def public_question(question: dict) -> dict:
-    return {
+    output = {
         key: value
         for key, value in question.items()
-        if key not in {"answer", "answers", "tests", "test_inputs"}
+        if key
+        not in {
+            "answer",
+            "answers",
+            "explanation",
+            "hint",
+            "source_question_id",
+            "reference_solution",
+            "required_tokens",
+            "solution",
+            "tests",
+            "test_inputs",
+            "tool_ids",
+            "tool_help",
+        }
     }
+    # В recognition/free-recall/Parsons справочник часто буквально содержит ответ.
+    # При написании кода он остаётся доступным как честная документация по уже изученным API.
+    output["tool_help"] = (
+        public_tool_help(question.get("tool_help", ())) if question["kind"] == "code" else []
+    )
+    return output
 
 
 def public_lesson(item: dict, include_questions: bool = False) -> dict:

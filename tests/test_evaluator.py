@@ -27,6 +27,16 @@ def test_code_runner_simulates_input_and_returns_console_output() -> None:
     assert result["output"] == "Имя: Лена\nПривет, Лена!\n"
 
 
+def test_code_runner_uses_utf8_for_ruble_signs_and_emoji_on_windows() -> None:
+    result = run_code(
+        "print('75 ₽ · готово ✅')\n",
+        [{"kind": "stdout", "expected": "75 ₽ · готово ✅"}],
+    )
+
+    assert result["correct"] is True
+    assert result["output"] == "75 ₽ · готово ✅\n"
+
+
 def test_code_runner_explains_when_input_value_is_missing() -> None:
     result = run_code("name = input('Имя: ')\n", [], [])
     assert result["correct"] is False

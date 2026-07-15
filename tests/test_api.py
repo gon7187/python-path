@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app.content import EXAMS, LESSONS, QUESTION_BY_ID
-from app.db import save_lesson
+from app.content import EXAM_SOURCE_QUESTION_ID, EXAMS, LESSONS, MODULES, QUESTION_BY_ID
+from app.db import save_exam, save_lesson
 from app.main import app
 
 
@@ -48,6 +48,11 @@ def test_extended_course_unlocks_after_foundation() -> None:
         for lesson in LESSONS[:target_index]:
             total = len(lesson["questions"])
             save_lesson(lesson["id"], total, total, lesson["xp"])
+        target_module_index = next(
+            index for index, module in enumerate(MODULES) if module["id"] == target["module_id"]
+        )
+        previous_module = MODULES[target_module_index - 1]
+        save_exam(previous_module["id"], 8, 8)
 
         response = client.get("/api/lessons/operators-arithmetic")
         assert response.status_code == 200
@@ -57,7 +62,7 @@ def test_extended_course_unlocks_after_foundation() -> None:
             "/api/code/check",
             json={
                 "question_id": "operators-arithmetic-code",
-                "answer": "def increment(value):\n    return value + 1\n",
+                "answer": "def subtotal(price, count):\n    return price * count\n",
             },
         )
         assert code_check.status_code == 200
@@ -67,6 +72,10 @@ def test_extended_course_unlocks_after_foundation() -> None:
 
 def test_editor_runs_code_with_simulated_input() -> None:
     with TestClient(app) as client:
+        target = next(lesson for lesson in LESSONS if lesson["id"] == "warmup-input")
+        for lesson in LESSONS[: LESSONS.index(target)]:
+            total = len(lesson["questions"])
+            save_lesson(lesson["id"], total, total, lesson["xp"])
         response = client.post(
             "/api/code/run",
             json={
@@ -96,11 +105,35 @@ def test_free_sandbox_runs_code_without_a_lesson_question() -> None:
         assert result["output"] == "Имя: мира\nМИРА\n"
 
 
+def test_public_run_endpoints_hide_internal_execution_phase() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        failing = "raise ValueError('моя ошибка')\n"
+
+        sandbox = client.post("/api/sandbox/run", json={"answer": failing, "inputs": []})
+        editor = client.post(
+            "/api/code/run",
+            json={"question_id": "warmup-route-code", "answer": failing, "inputs": []},
+        )
+        prerequisite = next(item for item in LESSONS if item["id"] == "warmup-input")
+        save_lesson(prerequisite["id"], 3, 3, prerequisite["xp"])
+        project = client.post(
+            "/api/projects/greeting-card/run", json={"answer": failing, "inputs": []}
+        )
+
+        for response in (sandbox, editor, project):
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["correct"] is False
+            assert "error_phase" not in payload
+        client.post("/api/reset")
+
+
 def test_projects_are_progressive_and_run_in_the_sandbox() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")
         projects = client.get("/api/projects").json()["projects"]
-        assert len(projects) == 6
+        assert len(projects) == 15
         assert projects[0]["unlocked"] is False
         assert projects[1]["unlocked"] is False
 
@@ -110,6 +143,14 @@ def test_projects_are_progressive_and_run_in_the_sandbox() -> None:
         project = client.get("/api/projects/greeting-card").json()
         assert project["starter"].startswith("name = input")
         assert "tests" not in project
+        assert "tool_ids" not in project
+        assert "reference_solution" not in project
+        assert {tool["name"] for tool in project["tool_help"]} == {
+            "input()",
+            "f-строка",
+            "print()",
+        }
+        assert "tool_help" not in projects[0]
 
         source = "name = input('Имя: ')\nprint(f'Привет, {name}!')\n"
         run = client.post(
@@ -146,6 +187,11 @@ def test_practice_sessions_are_guided_and_repeat_errors() -> None:
             "code",
         ]
         assert all(question["guide"] for question in session["questions"])
+        assert all(
+            bool(question["tool_help"]) == (question["kind"] == "code")
+            for question in session["questions"]
+        )
+        assert all("tool_ids" not in question for question in session["questions"])
         assert session["available_modules"][0]["id"] == "gentle-start"
 
         first = LESSONS[0]
@@ -178,6 +224,50 @@ def test_practice_sessions_are_guided_and_repeat_errors() -> None:
             "Как проходить урок"
         }
         client.post("/api/reset")
+
+
+def test_direct_question_endpoints_cannot_skip_locked_lessons_or_award_xp() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        future_id = "strings-pro-search-replace-code"
+
+        practice = client.post(
+            "/api/practice/submit",
+            json={
+                "question_id": future_id,
+                "answer": "def normalize_decimal(text):\n    return text\n",
+            },
+        )
+        check = client.post(
+            "/api/code/check",
+            json={
+                "question_id": future_id,
+                "answer": "def normalize_decimal(text):\n    return text\n",
+            },
+        )
+        run = client.post(
+            "/api/code/run",
+            json={"question_id": future_id, "answer": "print('обход')", "inputs": []},
+        )
+
+        assert practice.status_code == check.status_code == run.status_code == 403
+        assert client.get("/api/dashboard").json()["profile"]["xp"] == 0
+
+
+def test_code_check_feedback_does_not_expose_hidden_test_oracle() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        response = client.post(
+            "/api/code/check",
+            json={"question_id": "warmup-route-code", "answer": "print('другой текст')"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["correct"] is False
+        assert payload["checks"]
+        assert all(set(check) <= {"passed", "kind"} for check in payload["checks"])
+        assert "Я готов учиться" not in payload["message"]
 
 
 def test_lesson_cannot_pass_by_skipping_mandatory_code() -> None:
@@ -216,7 +306,7 @@ def test_exam_requires_practical_questions_even_above_score_threshold() -> None:
                 answer = question["answer"]
             elif question["kind"] == "input":
                 answer = question["answers"][0]
-            elif question_id == "var-code":
+            elif EXAM_SOURCE_QUESTION_ID[question_id] == "var-code":
                 answer = "city = 'Казань'\nprint(f'Город: {city}')\n"
             else:
                 answer = ""
@@ -249,4 +339,33 @@ def test_legacy_progress_continues_past_new_gentle_start() -> None:
 
         dashboard = client.get("/api/dashboard").json()
         assert dashboard["next_lesson"]["id"] == "strings-input"
+        client.post("/api/reset")
+
+
+def test_dashboard_surfaces_required_exam_at_a_module_boundary() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        first_module = MODULES[0]
+        module_lessons = [lesson for lesson in LESSONS if lesson["module_id"] == first_module["id"]]
+        for lesson in module_lessons:
+            total = len(lesson["questions"])
+            save_lesson(lesson["id"], total, total, lesson["xp"])
+
+        dashboard = client.get("/api/dashboard").json()
+        assert dashboard["next_lesson"] is None
+        assert dashboard["next_exam"] == {
+            "module_id": first_module["id"],
+            "module_title": first_module["title"],
+            "title": EXAMS[first_module["id"]]["title"],
+        }
+        assert dashboard["course"][0]["exam"] == {
+            "available": True,
+            "passed": False,
+            "score": None,
+        }
+
+        save_exam(first_module["id"], 8, 8)
+        after_exam = client.get("/api/dashboard").json()
+        assert after_exam["next_exam"] is None
+        assert after_exam["next_lesson"] is not None
         client.post("/api/reset")

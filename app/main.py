@@ -7,14 +7,18 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from math import ceil
 from pathlib import Path
+from random import SystemRandom
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.content import (
+    EXAM_MODULE_BY_QUESTION_ID,
+    EXAM_QUESTION_LESSON_ID,
+    EXAM_SOURCE_QUESTION_ID,
     EXAMS,
     LESSON_BY_ID,
     LESSONS,
@@ -51,6 +55,12 @@ app = FastAPI(title="Python Path", version="1.0.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 QUESTION_LESSON = {question["id"]: lesson for lesson in LESSONS for question in lesson["questions"]}
+QUESTION_LESSON.update(
+    {
+        question_id: LESSON_BY_ID[lesson_id]
+        for question_id, lesson_id in EXAM_QUESTION_LESSON_ID.items()
+    }
+)
 CONCEPT_LESSON_ID: dict[str, str] = {}
 for curriculum_lesson in LESSONS:
     for curriculum_concept in curriculum_lesson["concepts"]:
@@ -60,6 +70,7 @@ for curriculum_lesson in LESSONS:
 class Answer(BaseModel):
     question_id: str
     answer: Any = ""
+    hints_used: int = Field(default=0, ge=0, le=20)
 
 
 class Submission(BaseModel):
@@ -87,10 +98,66 @@ class SandboxRun(ProjectRun):
     """Свободный запуск в той же безопасной среде, что задания и проекты."""
 
 
-def status_for(lesson: dict, saved: dict) -> dict:
+def public_evaluation(result: dict) -> dict:
+    """Оставить полезную обратную связь, не отдавая браузеру oracle скрытых тестов."""
+    checks = result.get("checks", [])
+    output = {key: value for key, value in result.items() if key not in {"checks", "error_phase"}}
+    output["checks"] = [
+        {key: check[key] for key in ("passed", "kind", "scenario") if key in check}
+        for check in checks
+    ]
+    failed_kinds = {str(check.get("kind")) for check in checks if not check.get("passed")}
+    if not result.get("correct") and result.get("error_phase") == "hidden_test":
+        output["message"] = (
+            "Код остановился на одном из контрольных сценариев. Проверь, как функция ведёт себя "
+            "с другим типом, пустым значением или границей; скрытые входы не показываются."
+        )
+    elif not result.get("correct") and failed_kinds and failed_kinds != {"source"}:
+        if "stdout" in failed_kinds:
+            output["message"] = (
+                "Вывод программы пока не совпал с условием. Твой реальный вывод показан ниже: "
+                "сравни строки, значения и лишние пробелы с форматом в задании."
+            )
+        else:
+            output["message"] = (
+                "Код прошёл не все контрольные сценарии. Проверь пустой ввод, границы и другой "
+                "набор данных; конкретные скрытые значения не показываются как готовый ответ."
+            )
+    return output
+
+
+def shuffled_public_question(question: dict, randomizer: Any | None = None) -> dict:
+    """Перемешать варианты только в копии, не меняя авторский каталог."""
+    output = public_question(question)
+    if output["kind"] == "choice":
+        output["options"] = list(output["options"])
+        (randomizer or SystemRandom()).shuffle(output["options"])
+    return output
+
+
+def _exam_passed(module_id: str, exams: dict) -> bool:
+    progress = exams.get(module_id)
+    return bool(
+        progress
+        and progress.get("total_count", 0)
+        and progress["score"] / progress["total_count"] >= 0.7
+    )
+
+
+def status_for(lesson: dict, saved: dict, exams: dict | None = None) -> dict:
     index = next(index for index, item in enumerate(LESSONS) if item["id"] == lesson["id"])
     completed = lesson["id"] in saved
     previous_done = index == 0 or LESSONS[index - 1]["id"] in saved
+    module_index = next(
+        index for index, module in enumerate(MODULES) if module["id"] == lesson["module_id"]
+    )
+    module_lessons = [item for item in LESSONS if item["module_id"] == lesson["module_id"]]
+    is_module_start = lesson["id"] == module_lessons[0]["id"]
+    previous_exam_passed = (
+        module_index == 0
+        or not is_module_start
+        or _exam_passed(MODULES[module_index - 1]["id"], exams or {})
+    )
     prerequisite_lesson_ids = {
         CONCEPT_LESSON_ID[concept]
         for concept in lesson["prerequisites"]
@@ -99,9 +166,43 @@ def status_for(lesson: dict, saved: dict) -> dict:
     prerequisites_done = all(lesson_id in saved for lesson_id in prerequisite_lesson_ids)
     return {
         "completed": completed,
-        "unlocked": completed or (previous_done and prerequisites_done),
+        "unlocked": completed or (previous_done and prerequisites_done and previous_exam_passed),
         "stars": saved.get(lesson["id"], {}).get("stars", 0),
     }
+
+
+def require_question_access(
+    question_id: str,
+    *,
+    code_only: bool = False,
+    practice_only: bool = False,
+) -> dict:
+    """Не позволять прямым API-запросом перепрыгнуть учебный граф."""
+    question = QUESTION_BY_ID.get(question_id)
+    if not question or (code_only and question["kind"] != "code"):
+        raise HTTPException(status_code=404, detail="Задание не найдено")
+
+    exam_module_id = EXAM_MODULE_BY_QUESTION_ID.get(question_id)
+    if exam_module_id:
+        if practice_only:
+            raise HTTPException(
+                status_code=403, detail="Экзаменационное задание недоступно в практике"
+            )
+        module_lessons = [item for item in LESSONS if item["module_id"] == exam_module_id]
+        if not all(item["id"] in state()["lessons"] for item in module_lessons):
+            raise HTTPException(status_code=403, detail="Сначала заверши уроки этого раздела")
+        return question
+
+    lesson = QUESTION_LESSON[question_id]
+    snapshot = state()
+    if practice_only:
+        completed_ids = snapshot["lessons"]
+        first_guided_step = not completed_ids and lesson["id"] == LESSONS[0]["id"]
+        if lesson["id"] not in completed_ids and not first_guided_step:
+            raise HTTPException(status_code=403, detail="Сначала заверши урок с этим заданием")
+    elif not status_for(lesson, snapshot["lessons"], snapshot["exams"])["unlocked"]:
+        raise HTTPException(status_code=403, detail="Сначала открой урок с этим заданием")
+    return question
 
 
 def course_payload() -> dict:
@@ -110,7 +211,10 @@ def course_payload() -> dict:
     for module in MODULES:
         module_lessons = [item for item in LESSONS if item["module_id"] == module["id"]]
         lessons = [
-            {**public_lesson(item), **status_for(item, snapshot["lessons"])}
+            {
+                **public_lesson(item),
+                **status_for(item, snapshot["lessons"], snapshot["exams"]),
+            }
             for item in module_lessons
         ]
         complete_count = sum(item["completed"] for item in lessons)
@@ -123,7 +227,7 @@ def course_payload() -> dict:
                 "total": len(lessons),
                 "exam": {
                     "available": complete_count == len(lessons),
-                    "passed": bool(exam and exam["score"] / exam["total_count"] >= 0.7),
+                    "passed": _exam_passed(module["id"], snapshot["exams"]),
                     "score": exam["score"] if exam else None,
                 },
             }
@@ -136,7 +240,7 @@ def next_lesson_for(snapshot: dict) -> dict | None:
     unlocked = [
         item
         for item in LESSONS
-        if status_for(item, snapshot["lessons"])["unlocked"]
+        if status_for(item, snapshot["lessons"], snapshot["exams"])["unlocked"]
         and item["id"] not in snapshot["lessons"]
     ]
     if not unlocked:
@@ -157,12 +261,28 @@ def next_lesson_for(snapshot: dict) -> dict | None:
     return unlocked[0]
 
 
+def next_exam_for(snapshot: dict) -> dict | None:
+    """Вернуть первый завершённый раздел, которому ещё нужна контрольная."""
+    for module in MODULES:
+        module_lessons = [item for item in LESSONS if item["module_id"] == module["id"]]
+        if all(item["id"] in snapshot["lessons"] for item in module_lessons) and not _exam_passed(
+            module["id"], snapshot["exams"]
+        ):
+            return {
+                "module_id": module["id"],
+                "module_title": module["title"],
+                "title": EXAMS[module["id"]]["title"],
+            }
+    return None
+
+
 def dashboard_payload() -> dict:
     snapshot = state()
     course = course_payload()
     completed = len(snapshot["lessons"])
     total = len(LESSONS)
     next_lesson = next_lesson_for(snapshot)
+    next_exam = next_exam_for(snapshot) if next_lesson is None else None
     achievements = [
         {
             "id": "first",
@@ -199,6 +319,7 @@ def dashboard_payload() -> dict:
         "total_lessons": total,
         "progress_percent": round(completed / total * 100),
         "next_lesson": public_lesson(next_lesson) if next_lesson else None,
+        "next_exam": next_exam,
         "achievements": achievements,
         "course": course["modules"],
     }
@@ -208,21 +329,34 @@ def require_lesson(lesson_id: str) -> dict:
     lesson = LESSON_BY_ID.get(lesson_id)
     if not lesson:
         raise HTTPException(status_code=404, detail="Урок не найден")
-    if not status_for(lesson, state()["lessons"])["unlocked"]:
+    snapshot = state()
+    if not status_for(lesson, snapshot["lessons"], snapshot["exams"])["unlocked"]:
         raise HTTPException(status_code=403, detail="Сначала заверши предыдущий урок")
     return lesson
 
 
 def grade_answers(items: list[Answer], allowed_ids: list[str]) -> tuple[list[dict], int]:
-    provided = {item.question_id: item.answer for item in items if item.question_id in allowed_ids}
+    provided = {item.question_id: item for item in items if item.question_id in allowed_ids}
     results = []
     correct_count = 0
     for question_id in allowed_ids:
-        result = evaluate(QUESTION_BY_ID[question_id], provided.get(question_id, ""))
-        record_attempt(question_id, result["correct"])
+        submitted = provided.get(question_id)
+        result = evaluate(
+            QUESTION_BY_ID[question_id], submitted.answer if submitted is not None else ""
+        )
+        record_attempt(
+            EXAM_SOURCE_QUESTION_ID.get(question_id, question_id),
+            result["correct"],
+            submitted.hints_used if submitted is not None else 0,
+        )
         correct_count += int(result["correct"])
-        results.append({"question_id": question_id, **result})
+        results.append({"question_id": question_id, **public_evaluation(result)})
     return results, correct_count
+
+
+def required_lesson_answers(total: int) -> int:
+    """A lesson is mastered at 75%, with at least two correct answers."""
+    return max(2, ceil(total * 0.75))
 
 
 @app.get("/")
@@ -244,9 +378,13 @@ def course() -> dict:
 def get_lesson(lesson_id: str) -> dict:
     lesson = require_lesson(lesson_id)
     payload = public_lesson(lesson, include_questions=True)
+    randomizer = SystemRandom()
+    payload["questions"] = [
+        shuffled_public_question(question, randomizer) for question in lesson["questions"]
+    ]
     total = len(lesson["questions"])
     payload["pass_requirements"] = {
-        "required_correct": max(2, ceil(total * 0.65)),
+        "required_correct": required_lesson_answers(total),
         "mandatory_question_ids": [
             question["id"] for question in lesson["questions"] if question.get("mandatory")
         ],
@@ -260,7 +398,7 @@ def submit_lesson(lesson_id: str, submission: Submission) -> dict:
     question_ids = [question["id"] for question in lesson["questions"]]
     results, correct_count = grade_answers(submission.answers, question_ids)
     total = len(question_ids)
-    required_correct = max(2, ceil(total * 0.65))
+    required_correct = required_lesson_answers(total)
     result_by_id = {result["question_id"]: result for result in results}
     mandatory_ids = [
         question["id"] for question in lesson["questions"] if question.get("mandatory")
@@ -306,12 +444,18 @@ def practice_modules(lessons: list[dict]) -> list[dict]:
     ]
 
 
-def _practice_priority(question: dict, snapshot: dict) -> tuple[int, float, int, str]:
+def _review_interval_days(correct_streak: int) -> int:
+    """Map the first successful recall to day 1, then 3/7/14/30 days."""
+    index = min(max(correct_streak - 1, 0), len(REVIEW_INTERVALS_DAYS) - 1)
+    return REVIEW_INTERVALS_DAYS[index]
+
+
+def _practice_priority(question: dict, snapshot: dict) -> tuple[int, int, float, int, str]:
     """Due/weak questions first, then least practiced and least recently seen."""
     stats = snapshot["question_stats"].get(question["id"], {})
     total_attempts = int(stats.get("total_attempts", 0))
     streak = int(stats.get("correct_streak", 0))
-    interval = REVIEW_INTERVALS_DAYS[min(streak, len(REVIEW_INTERVALS_DAYS) - 1)]
+    interval = _review_interval_days(streak)
     last_raw = stats.get("last_attempt_at")
     if last_raw:
         last = datetime.fromisoformat(last_raw)
@@ -322,24 +466,24 @@ def _practice_priority(question: dict, snapshot: dict) -> tuple[int, float, int,
         overdue_seconds = float("inf")
         due_rank = 0
     weak_rank = 0 if question["id"] in snapshot["weak_question_ids"] else 1
-    return (weak_rank + due_rank, -overdue_seconds, total_attempts, last_raw or "")
+    return (weak_rank, due_rank, -overdue_seconds, total_attempts, last_raw or "")
 
 
 def _mixed_selection(questions: list[dict], limit: int, snapshot: dict) -> list[dict]:
-    """Interleave formats and rotate ties instead of returning question zero forever."""
+    """Keep the strongest due/weak item and then interleave available formats."""
     if not questions:
         return []
     ranked = sorted(questions, key=lambda item: _practice_priority(item, snapshot))
-    total_attempts = sum(
-        int(snapshot["question_stats"].get(item["id"], {}).get("total_attempts", 0))
-        for item in questions
-    )
     kinds = ("choice", "input", "parsons", "code")
-    selected: list[dict] = []
+    # Never rotate past the globally strongest item. Answering it changes its
+    # scheduling key, so a fresh/unseen neighbour naturally becomes first next.
+    selected: list[dict] = [ranked[0]]
     for kind in kinds:
-        candidates = [item for item in ranked if item["kind"] == kind]
+        if any(item["kind"] == kind for item in selected):
+            continue
+        candidates = [item for item in ranked if item["kind"] == kind and item not in selected]
         if candidates:
-            selected.append(candidates[total_attempts % len(candidates)])
+            selected.append(candidates[0])
         if len(selected) >= limit:
             return selected
     selected.extend(item for item in ranked if item not in selected)
@@ -359,9 +503,9 @@ def practice_questions(
     all_questions = [question for lesson in lessons for question in lesson["questions"]]
 
     if mode == "guided":
-        questions = current["questions"]
+        questions = _mixed_selection(current["questions"], limit, snapshot)
         return (
-            questions[:limit],
+            questions,
             "Закрепляем последний урок" if completed_lessons else "Пробный первый шаг",
             f"Закрепляем уже изученную тему «{current['title']}»: вспомнить, восстановить и применить.",
             "Сначала опирайся на пример из урока. В этой серии не будет ничего из будущих тем.",
@@ -376,7 +520,7 @@ def practice_questions(
                 key=lambda item: _practice_priority(item, snapshot),
             )
             return (
-                (weak + filler)[:limit],
+                _mixed_selection(weak + filler, limit, snapshot),
                 "Повторяем ошибки",
                 "Здесь только уже встречавшиеся сложные места. Ошибка — повод потренировать навык, а не оценка.",
                 "Прочитай план к каждому заданию и решай его заново, не пытаясь вспомнить прежний ответ.",
@@ -427,13 +571,17 @@ def practice_session(
     snapshot = state()
     questions, title, description, tip = practice_questions(mode, module_id, limit, snapshot)
     practice_lessons = available_practice_lessons(snapshot) or [LESSONS[0]]
+    randomizer = SystemRandom()
     return {
         "mode": mode,
         "title": title,
         "description": description,
         "tip": tip,
         "questions": [
-            {**public_question(question), "lesson_title": QUESTION_LESSON[question["id"]]["title"]}
+            {
+                **shuffled_public_question(question, randomizer),
+                "lesson_title": QUESTION_LESSON[question["id"]]["title"],
+            }
             for question in questions
         ],
         "available_modules": practice_modules(practice_lessons),
@@ -461,24 +609,20 @@ def practice() -> dict:
 
 @app.post("/api/practice/submit")
 def submit_practice(answer: Answer) -> dict:
-    question = QUESTION_BY_ID.get(answer.question_id)
-    if not question:
-        raise HTTPException(status_code=404, detail="Задание не найдено")
+    question = require_question_access(answer.question_id, practice_only=True)
     result = evaluate(question, answer.answer)
-    record_attempt(answer.question_id, result["correct"])
+    record_attempt(answer.question_id, result["correct"], answer.hints_used)
     gained = 5 if result["correct"] else 0
     if gained:
         with connection() as conn:
             conn.execute("UPDATE profile SET xp = xp + ? WHERE id = 1", (gained,))
-    return {"xp_gained": gained, **result}
+    return {"xp_gained": gained, **public_evaluation(result)}
 
 
 @app.post("/api/code/check")
 def check_code(payload: CodeCheck) -> dict:
-    question = QUESTION_BY_ID.get(payload.question_id)
-    if not question or question["kind"] != "code":
-        raise HTTPException(status_code=404, detail="Кодовое задание не найдено")
-    return evaluate(question, payload.answer)
+    question = require_question_access(payload.question_id, code_only=True)
+    return public_evaluation(evaluate(question, payload.answer))
 
 
 def project_status(project: dict, index: int, snapshot: dict) -> dict:
@@ -539,7 +683,7 @@ def get_project(project_id: str) -> dict:
 @app.post("/api/projects/{project_id}/run")
 def run_project(project_id: str, payload: ProjectRun) -> dict:
     require_project(project_id)
-    return run_code(payload.answer, [], payload.inputs)
+    return public_evaluation(run_code(payload.answer, [], payload.inputs))
 
 
 @app.post("/api/projects/{project_id}/submit")
@@ -567,6 +711,7 @@ def submit_project(project_id: str, payload: ProjectSubmission) -> dict:
     result = {
         "correct": correct,
         "message": "Все сценарии проекта прошли." if correct else failure_message,
+        "error_phase": first_failed.get("error_phase") if first_failed else None,
         "checks": [
             {**check, "scenario": scenario["name"]}
             for scenario in scenario_results
@@ -584,25 +729,24 @@ def submit_project(project_id: str, payload: ProjectSubmission) -> dict:
     gained = 0
     if result["correct"]:
         gained, _ = save_project(project_id, project["xp"])
+    public_result = public_evaluation(result)
     return {
-        **result,
+        **public_result,
         "xp_gained": gained,
-        "message": project["success"] if result["correct"] else result["message"],
+        "message": project["success"] if result["correct"] else public_result["message"],
     }
 
 
 @app.post("/api/code/run")
 def run_editor_code(payload: CodeRun) -> dict:
     """Запускает код с введёнными учеником строками без раскрытия тестов задания."""
-    question = QUESTION_BY_ID.get(payload.question_id)
-    if not question or question["kind"] != "code":
-        raise HTTPException(status_code=404, detail="Кодовое задание не найдено")
-    return run_code(payload.answer, [], payload.inputs)
+    require_question_access(payload.question_id, code_only=True)
+    return public_evaluation(run_code(payload.answer, [], payload.inputs))
 
 
 @app.post("/api/sandbox/run")
 def run_sandbox(payload: SandboxRun) -> dict:
-    return run_code(payload.answer, [], payload.inputs)
+    return public_evaluation(run_code(payload.answer, [], payload.inputs))
 
 
 @app.get("/api/exams/{module_id}")
@@ -614,11 +758,16 @@ def get_exam(module_id: str) -> dict:
     saved = state()["lessons"]
     if not all(item["id"] in saved for item in module_lessons):
         raise HTTPException(status_code=403, detail="Экзамен откроется после всех уроков раздела")
+    randomizer = SystemRandom()
+    questions = [
+        shuffled_public_question(QUESTION_BY_ID[item], randomizer) for item in exam["question_ids"]
+    ]
+    randomizer.shuffle(questions)
     return {
         "module_id": module_id,
         "title": exam["title"],
         "description": exam["description"],
-        "questions": [public_question(QUESTION_BY_ID[item]) for item in exam["question_ids"]],
+        "questions": questions,
     }
 
 

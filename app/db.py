@@ -36,6 +36,7 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 question_id TEXT NOT NULL,
                 correct INTEGER NOT NULL,
+                hints_used INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS exam_progress (
@@ -51,6 +52,11 @@ def init_db() -> None:
             INSERT OR IGNORE INTO profile (id, xp, streak, last_activity) VALUES (1, 0, 0, NULL);
             """
         )
+        attempt_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(attempts)").fetchall()
+        }
+        if "hints_used" not in attempt_columns:
+            conn.execute("ALTER TABLE attempts ADD COLUMN hints_used INTEGER NOT NULL DEFAULT 0")
 
 
 def _touch_activity(conn: sqlite3.Connection) -> None:
@@ -66,12 +72,20 @@ def _touch_activity(conn: sqlite3.Connection) -> None:
         )
 
 
-def record_attempt(question_id: str, correct: bool) -> None:
+def record_attempt(question_id: str, correct: bool, hints_used: int = 0) -> None:
     with connection() as conn:
         _touch_activity(conn)
         conn.execute(
-            "INSERT INTO attempts (question_id, correct, created_at) VALUES (?, ?, ?)",
-            (question_id, int(correct), datetime.now(UTC).isoformat()),
+            """
+            INSERT INTO attempts (question_id, correct, hints_used, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                question_id,
+                int(correct),
+                max(0, int(hints_used)),
+                datetime.now(UTC).isoformat(),
+            ),
         )
 
 
@@ -147,6 +161,8 @@ def _attempt_snapshot(rows: list[sqlite3.Row]) -> tuple[dict[str, dict], list[st
     for row in rows:
         question_id = row["question_id"]
         correct = bool(row["correct"])
+        hints_used = max(0, int(row["hints_used"]))
+        independent_correct = correct and hints_used == 0
         item = stats.setdefault(
             question_id,
             {
@@ -154,22 +170,26 @@ def _attempt_snapshot(rows: list[sqlite3.Row]) -> tuple[dict[str, dict], list[st
                 "correct_attempts": 0,
                 "correct_streak": 0,
                 "has_mistake": False,
+                "assisted_attempts": 0,
                 "last_attempt_at": None,
                 "last_correct": None,
+                "last_hints_used": 0,
             },
         )
         item["total_attempts"] += 1
         item["correct_attempts"] += int(correct)
-        item["correct_streak"] = item["correct_streak"] + 1 if correct else 0
+        item["assisted_attempts"] += int(hints_used > 0)
+        item["correct_streak"] = item["correct_streak"] + 1 if independent_correct else 0
         item["has_mistake"] = item["has_mistake"] or not correct
         item["last_attempt_at"] = row["created_at"]
         item["last_correct"] = correct
+        item["last_hints_used"] = hints_used
 
     weak = sorted(
         (
             question_id
             for question_id, item in stats.items()
-            if item["has_mistake"] and item["correct_streak"] < 2
+            if (item["has_mistake"] or item["assisted_attempts"]) and item["correct_streak"] < 2
         ),
         key=lambda question_id: stats[question_id]["last_attempt_at"] or "",
     )[:10]
@@ -198,7 +218,13 @@ def state() -> dict:
             for row in conn.execute("SELECT project_id, completed_at FROM project_progress")
         }
         attempt_rows = list(
-            conn.execute("SELECT question_id, correct, created_at FROM attempts ORDER BY id ASC")
+            conn.execute(
+                """
+                SELECT question_id, correct, hints_used, created_at
+                FROM attempts
+                ORDER BY id ASC
+                """
+            )
         )
         question_stats, weak = _attempt_snapshot(attempt_rows)
     return {
