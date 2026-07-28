@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from app.content import EXAMS, LESSONS, MODULES, QUESTION_BY_ID
 from app.evaluator import evaluate
 from app.extended_curriculum import EXTRA_LESSONS
@@ -81,9 +83,24 @@ def test_reference_solutions_for_lessons_13_25_pass_the_runner() -> None:
 
 
 def test_lessons_four_to_six_do_not_require_future_topics() -> None:
-    assert QUESTION_BY_ID["if-result"]["prompt"] == (
-        "Что выведет этот код?\n\nif 3 > 5:\n    print('да')\nelse:\n    print('нет')"
+    if_result = QUESTION_BY_ID["if-result"]
+    assert "\n" in if_result["prompt"]
+    assert (
+        if_result["prompt"]
+        == "Что выведет этот код?\n\nif 3 > 5:\n    print('да')\nelse:\n    print('нет')"
     )
+
+    for question_id in ("if-code", "for-code", "while-code"):
+        question = QUESTION_BY_ID[question_id]
+        assert "def " not in question["prompt"]
+        assert "def " not in question["starter"]
+        assert "[" not in question["prompt"]
+        assert "[" not in question["starter"]
+
+    styles = Path("app/static/styles.css").read_text(encoding="utf-8")
+    assert ".question-prompt" in styles
+    assert "white-space: pre-wrap" in styles
+
     assert QUESTION_BY_ID["if-code"]["tests"] == [{"kind": "stdout", "expected": "Возьми куртку"}]
     assert QUESTION_BY_ID["for-code"]["tests"] == [{"kind": "stdout", "expected": "1\n2\n3\n4\n5"}]
     assert QUESTION_BY_ID["while-code"]["tests"] == [

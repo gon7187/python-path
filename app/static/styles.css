@@ -1,3 +1,5 @@
+.question-prompt { white-space: pre-wrap !important; }
+
 :root {
   --ink: #25304a;
   --muted: #75809a;
