@@ -134,7 +134,7 @@ function bindQuestionControls(scope) {
       button.textContent = 'Проверяем…';
       try {
         const result = await api('/api/code/check', { method: 'POST', body: JSON.stringify({ question_id: questionId, answer: editor.value }) });
-        showInline(questionId, result.correct, result.message, result.checks);
+        showInline(questionId, result.correct, result.message, result.checks, result.error_hint);
       } catch (error) { showInline(questionId, false, error.message); }
       button.disabled = false;
       button.textContent = '▷ Проверить код';
@@ -167,12 +167,15 @@ function showCodeOutput(questionId, result) {
   node.textContent = output.join('\n') || 'Нет вывода.';
 }
 
-function showInline(questionId, correct, message, checks = []) {
+function showInline(questionId, correct, message, checks = [], errorHint = null) {
   const node = document.querySelector(`#result-${questionId}`);
   if (!node) return;
   const details = checks.length && !correct ? ` <small>(${checks.filter((item) => !item.passed).map((item) => `ожидалось ${esc(item.expected)}, получено ${esc(item.actual)}`).join('; ')})</small>` : '';
   node.className = `inline-result visible ${correct ? 'ok' : 'no'}`;
-  node.innerHTML = `${correct ? '✓' : '↺'} ${esc(message)}${details}`;
+  const hint = errorHint
+    ? `<div class="error-hint"><strong>${esc(errorHint.title)}</strong><span>${esc(errorHint.hint)}</span></div><small class="raw-error">${esc(errorHint.original)}</small>`
+    : `${correct ? '✓' : '↺'} ${esc(message)}`;
+  node.innerHTML = `${hint}${details}`;
 }
 
 function submissionResult(result, retryText = 'Попробовать ещё раз') {
@@ -203,7 +206,7 @@ async function renderLesson(id) {
       const result = await api(`/api/lessons/${id}/submit`, { method: 'POST', body: JSON.stringify({ answers: getAnswers(form, lesson.questions) }) });
       document.querySelector('#submission-result')?.remove();
       form.insertAdjacentHTML('afterend', submissionResult(result));
-      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks));
+      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks, item.error_hint));
       await refreshDashboard();
       if (result.passed) toast(`+${result.xp_gained} XP — урок пройден!`);
     } catch (error) { toast(error.message); }
@@ -223,7 +226,7 @@ async function renderPractice() {
     const answer = getAnswers(form, [question])[0];
     try {
       const result = await api('/api/practice/submit', { method: 'POST', body: JSON.stringify(answer) });
-      showInline(question.id, result.correct, result.message, result.checks);
+      showInline(question.id, result.correct, result.message, result.checks, result.error_hint);
       await refreshDashboard();
       if (result.correct) toast(`Верно! +${result.xp_gained} XP`);
     } catch (error) { toast(error.message); }
@@ -243,7 +246,7 @@ async function renderExam(moduleId) {
       const result = await api(`/api/exams/${moduleId}/submit`, { method: 'POST', body: JSON.stringify({ answers: getAnswers(form, exam.questions) }) });
       document.querySelector('#submission-result')?.remove();
       form.insertAdjacentHTML('afterend', submissionResult(result, 'Пересдать экзамен'));
-      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks));
+      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks, item.error_hint));
       await refreshDashboard();
       if (result.passed) toast(`Экзамен сдан! +${result.xp_gained} XP`);
     } catch (error) { toast(error.message); }
@@ -271,6 +274,42 @@ document.querySelector('#reset-button').addEventListener('click', async () => {
   toast('Прогресс сброшен. Начинаем с чистого листа!');
   location.hash = '#/';
   render();
+});
+
+document.addEventListener('keydown', (event) => {
+  const editor = event.target.closest('.code-editor');
+  if (!editor) return;
+  const { value, selectionStart: start, selectionEnd: end } = editor;
+  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+  const lineEndIndex = value.indexOf('\n', Math.max(start, end - 1));
+  const lineEnd = lineEndIndex < 0 ? value.length : lineEndIndex;
+
+  if (event.key === 'Enter') {
+    const line = value.slice(lineStart, lineEnd);
+    const indent = (line.match(/^\s*/) || [''])[0] + (line.trimEnd().endsWith(':') ? '    ' : '');
+    event.preventDefault();
+    editor.setRangeText(`\n${indent}`, start, end, 'end');
+    return;
+  }
+
+  if (event.key !== 'Tab') return;
+  event.preventDefault();
+  const selected = value.slice(lineStart, lineEnd);
+  if (!event.shiftKey && !selected.includes('\n')) {
+    editor.setRangeText('    ', start, end, 'end');
+    return;
+  }
+  if (event.shiftKey) {
+    const unindented = selected.replace(/^ {1,4}/gm, '');
+    const removedBeforeCursor = Math.min(4, (value.slice(lineStart, start).match(/^ */) || [''])[0].length);
+    editor.value = value.slice(0, lineStart) + unindented + value.slice(lineEnd);
+    editor.setSelectionRange(start - removedBeforeCursor, end - (selected.length - unindented.length));
+  } else {
+    const indented = selected.replace(/^/gm, '    ');
+    const lines = selected.split('\n').length;
+    editor.value = value.slice(0, lineStart) + indented + value.slice(lineEnd);
+    editor.setSelectionRange(start + 4, end + lines * 4);
+  }
 });
 window.addEventListener('hashchange', render);
 render();

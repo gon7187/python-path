@@ -22,6 +22,7 @@ from app.content import (
     public_question,
 )
 from app.db import DATABASE_PATH, connection, init_db, record_attempt, save_exam, save_lesson, state
+from app.error_hints import translate_error
 from app.evaluator import evaluate, run_code
 
 APP_DIR = Path(__file__).parent
@@ -165,6 +166,8 @@ def grade_answers(items: list[Answer], allowed_ids: set[str]) -> tuple[list[dict
     correct_count = 0
     for question_id in allowed_ids:
         result = evaluate(QUESTION_BY_ID[question_id], provided.get(question_id, ""))
+        if error_text := result.get("error"):
+            result["error_hint"] = translate_error(error_text)
         record_attempt(question_id, result["correct"])
         correct_count += int(result["correct"])
         results.append({"question_id": question_id, **result})
@@ -253,6 +256,8 @@ def submit_practice(answer: Answer) -> dict:
     if not question:
         raise HTTPException(status_code=404, detail="Задание не найдено")
     result = evaluate(question, answer.answer)
+    if error_text := result.get("error"):
+        result["error_hint"] = translate_error(error_text)
     record_attempt(answer.question_id, result["correct"])
     gained = 5 if result["correct"] else 0
     if gained:
@@ -266,7 +271,10 @@ def check_code(payload: CodeCheck) -> dict:
     question = QUESTION_BY_ID.get(payload.question_id)
     if not question or question["kind"] != "code":
         raise HTTPException(status_code=404, detail="Кодовое задание не найдено")
-    return evaluate(question, payload.answer)
+    result = evaluate(question, payload.answer)
+    if error_text := result.get("error"):
+        result["error_hint"] = translate_error(error_text)
+    return result
 
 
 @app.post("/api/code/run")
