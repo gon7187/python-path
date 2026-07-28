@@ -57,3 +57,34 @@ def test_extended_course_unlocks_after_foundation() -> None:
         assert code_check.status_code == 200
         assert code_check.json()["correct"] is True
         client.post("/api/reset")
+
+
+def test_lesson_requires_correct_code_for_completion() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        two_without_code = [
+            {"question_id": "hello-print", "answer": "print('Привет')"},
+            {"question_id": "hello-string", "answer": "строка"},
+            {"question_id": "hello-code", "answer": ""},
+        ]
+        response = client.post("/api/lessons/hello/submit", json={"answers": two_without_code})
+        assert response.json()["passed"] is False
+        assert response.json()["message"] == "Для зачёта нужно решить задачу на код"
+
+        code_and_one_other = [
+            {"question_id": "hello-print", "answer": "print('неверно')"},
+            {"question_id": "hello-string", "answer": "строка"},
+            {"question_id": "hello-code", "answer": "print('Я начинаю путь в Python!')"},
+        ]
+        response = client.post("/api/lessons/hello/submit", json={"answers": code_and_one_other})
+        assert response.json()["passed"] is True
+
+        code_only = [
+            {"question_id": "hello-print", "answer": "неверно"},
+            {"question_id": "hello-string", "answer": "неверно"},
+            {"question_id": "hello-code", "answer": "print('Я начинаю путь в Python!')"},
+        ]
+        client.post("/api/reset")
+        response = client.post("/api/lessons/hello/submit", json={"answers": code_only})
+        assert response.json()["passed"] is False
+        client.post("/api/reset")
