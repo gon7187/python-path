@@ -116,3 +116,16 @@ def test_lesson_requires_correct_code_for_completion() -> None:
         response = client.post("/api/lessons/hello/submit", json={"answers": code_only})
         assert response.json()["passed"] is False
         client.post("/api/reset")
+
+
+def test_code_check_includes_translated_error_hint() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/code/check",
+            json={"question_id": "hello-code", "answer": "if True print('Привет')"},
+        )
+
+    result = response.json()
+    assert result["correct"] is False
+    assert result["error_hint"]["title"] == "Синтаксическая ошибка"
+    assert result["error_hint"]["original"].startswith("SyntaxError:")

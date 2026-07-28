@@ -150,12 +150,13 @@ def run_code(source: str, tests: list[dict]) -> dict:
         tree = ast.parse(source)
         SafetyVisitor().visit(tree)
     except (SyntaxError, ValueError) as error:
+        error_text = f"{type(error).__name__}: {error}"
         return {
             "correct": False,
             "message": str(error),
             "stdout": "",
             "stderr": "",
-            "error": str(error),
+            "error": error_text,
             "timed_out": False,
         }
 
@@ -186,12 +187,13 @@ def run_code(source: str, tests: list[dict]) -> dict:
             check=False,
         )
     except subprocess.TimeoutExpired:
+        error_text = "TimeoutError: Код выполнялся слишком долго. Проверь условие цикла."
         return {
             "correct": False,
-            "message": "Код выполнялся слишком долго. Проверь условие цикла.",
+            "message": error_text,
             "stdout": "",
             "stderr": "",
-            "error": "Код выполнялся слишком долго. Проверь условие цикла.",
+            "error": error_text,
             "timed_out": True,
         }
 
