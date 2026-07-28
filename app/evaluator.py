@@ -90,15 +90,47 @@ def _check_source_requirements(tree: ast.AST, tests: list[dict]) -> str | None:
             continue
         if test.get("requires") == "unpacking":
             name = test.get("name")
+            function = test.get("function")
+            scope: ast.AST = tree
+            if function:
+                target_function = next(
+                    (
+                        node
+                        for node in ast.walk(tree)
+                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and node.name == function
+                    ),
+                    None,
+                )
+                scope = ast.Module(
+                    body=target_function.body if target_function else [], type_ignores=[]
+                )
             has_unpacking = any(
                 isinstance(node, ast.Assign)
                 and isinstance(node.value, ast.Name)
                 and node.value.id == name
                 and any(isinstance(target, (ast.Tuple, ast.List)) for target in node.targets)
-                for node in ast.walk(tree)
+                for node in ast.walk(scope)
             )
-            uses_index = any(isinstance(node, ast.Subscript) for node in ast.walk(tree))
-            if not has_unpacking or uses_index:
+            uses_index = any(isinstance(node, ast.Subscript) for node in ast.walk(scope))
+            if function:
+                unpacking_values = {
+                    id(node.value)
+                    for node in ast.walk(scope)
+                    if isinstance(node, ast.Assign)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == name
+                    and any(isinstance(target, (ast.Tuple, ast.List)) for target in node.targets)
+                }
+                uses_parameter_elsewhere = any(
+                    isinstance(node, ast.Name)
+                    and node.id == name
+                    and id(node) not in unpacking_values
+                    for node in ast.walk(scope)
+                )
+            else:
+                uses_parameter_elsewhere = False
+            if not has_unpacking or uses_index or uses_parameter_elsewhere:
                 return "В этом задании нужна распаковка последовательности без индексов."
     return None
 
