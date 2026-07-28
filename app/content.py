@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.extended_curriculum import EXTRA_EXAMS, EXTRA_LESSONS, EXTRA_MODULES
+from app.lessons_13_25 import LESSONS_13_25
 
 
 def theory(title: str, text: str, example: str, tip: str = "") -> dict:
@@ -728,6 +729,7 @@ LESSONS = [
 
 
 MODULES.extend(EXTRA_MODULES)
+LESSONS.extend(LESSONS_13_25)
 LESSONS.extend(EXTRA_LESSONS)
 
 
@@ -767,7 +769,9 @@ QUESTION_BY_ID = {question["id"]: question for item in LESSONS for question in i
 
 def public_question(question: dict) -> dict:
     return {
-        key: value for key, value in question.items() if key not in {"answer", "answers", "tests"}
+        key: value
+        for key, value in question.items()
+        if key not in {"answer", "answers", "tests", "reference"}
     }
 
 

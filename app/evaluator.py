@@ -84,6 +84,25 @@ def normalize(value: Any) -> str:
     return str(value or "").strip().casefold()
 
 
+def _check_source_requirements(tree: ast.AST, tests: list[dict]) -> str | None:
+    for test in tests:
+        if test.get("kind") != "source":
+            continue
+        if test.get("requires") == "unpacking":
+            name = test.get("name")
+            has_unpacking = any(
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == name
+                and any(isinstance(target, (ast.Tuple, ast.List)) for target in node.targets)
+                for node in ast.walk(tree)
+            )
+            uses_index = any(isinstance(node, ast.Subscript) for node in ast.walk(tree))
+            if not has_unpacking or uses_index:
+                return "В этом задании нужна распаковка последовательности без индексов."
+    return None
+
+
 def run_code(source: str, tests: list[dict]) -> dict:
     """Выполняет небольшой фрагмент в отдельном Python-процессе с лимитом времени."""
     if len(source) > 5_000:
@@ -96,7 +115,8 @@ def run_code(source: str, tests: list[dict]) -> dict:
             "timed_out": False,
         }
     try:
-        SafetyVisitor().visit(ast.parse(source))
+        tree = ast.parse(source)
+        SafetyVisitor().visit(tree)
     except (SyntaxError, ValueError) as error:
         return {
             "correct": False,
@@ -107,10 +127,23 @@ def run_code(source: str, tests: list[dict]) -> dict:
             "timed_out": False,
         }
 
+    requirement_error = _check_source_requirements(tree, tests)
+    if requirement_error:
+        return {
+            "correct": False,
+            "message": requirement_error,
+            "checks": [],
+            "stdout": "",
+            "stderr": "",
+            "error": requirement_error,
+            "timed_out": False,
+        }
+
+    runtime_tests = [test for test in tests if test.get("kind") != "source"]
     encoded_code = base64.b64encode(source.encode("utf-8")).decode("ascii")
-    encoded_tests = base64.b64encode(json.dumps(tests, ensure_ascii=False).encode("utf-8")).decode(
-        "ascii"
-    )
+    encoded_tests = base64.b64encode(
+        json.dumps(runtime_tests, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
     program = RUNNER.replace("CODE", repr(encoded_code)).replace("TESTS", repr(encoded_tests))
     try:
         result = subprocess.run(
