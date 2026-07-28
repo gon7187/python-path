@@ -7,7 +7,23 @@
 
 from __future__ import annotations
 
+import random
 from typing import Any
+
+from app.lessons_13_25 import LESSONS_13_25
+
+TERM_SYNONYMS = {
+    "арифметический оператор": ("арифметика", "оператор"),
+    "оператор %": ("%", "остаток"),
+    "оператор and": ("and", "логическое и"),
+    "срез": ("slice", "срез строки"),
+    "метод replace": ("replace", "замена"),
+    "метод join": ("join", "соединение строк"),
+    "f-строка": ("f string", "форматированная строка"),
+    "кортеж": ("tuple",),
+    "распаковка": ("unpacking",),
+    "append": ("метод append", "добавление в список"),
+}
 
 
 def _theory(title: str, text: str, example: str, tip: str = "") -> dict[str, str]:
@@ -1389,12 +1405,15 @@ def _make_questions(
 ) -> list[dict[str, Any]]:
     _, title, subtitle, keyword, example, concept, _ = lesson_spec
     code_task = _code_task(task_kind)
+    choice_id = f"{lesson_id}-choice"
+    options = [example, "print('Сначала пишем код, потом думаем')", "value = input() + 1"]
+    random.Random(f"{lesson_id}:{choice_id}").shuffle(options)
     return [
         {
-            "id": f"{lesson_id}-choice",
+            "id": choice_id,
             "kind": "choice",
             "prompt": f"Какой пример относится к теме «{title}»?",
-            "options": [example, "print('Сначала пишем код, потом думаем')", "value = input() + 1"],
+            "options": options,
             "answer": example,
             "explanation": concept,
         },
@@ -1402,8 +1421,8 @@ def _make_questions(
             "id": f"{lesson_id}-term",
             "kind": "input",
             "prompt": f"Какой ключевой инструмент или термин связывает урок «{title}»?",
-            "answers": [keyword],
-            "placeholder": "Например: словарь",
+            "answers": [keyword, *TERM_SYNONYMS.get(keyword, ())],
+            "placeholder": f"Например: {keyword}",
             "explanation": f"Ключевой ориентир урока — «{keyword}». {subtitle}.",
         },
         {"id": f"{lesson_id}-code", "kind": "code", **code_task},
@@ -1429,11 +1448,10 @@ def build_extended_course() -> tuple[
                 "icon": unit["icon"],
             }
         )
-        question_ids: list[str] = []
+        question_ids_by_kind: dict[str, list[str]] = {"choice": [], "input": [], "code": []}
         for lesson_index, spec in enumerate(unit["lessons"]):
             slug, title, subtitle, keyword, example, concept, advice = spec
             lesson_id = f"{module_id}-{slug}"
-            question_ids.append(f"{lesson_id}-choice")
             if order >= 26:
                 questions = _make_questions(lesson_id, spec, TASK_CYCLES[unit_index][lesson_index])
                 lessons.append(
@@ -1462,10 +1480,27 @@ def build_extended_course() -> tuple[
                         "questions": questions,
                     }
                 )
+            else:
+                questions = next(lesson for lesson in LESSONS_13_25 if lesson["id"] == lesson_id)["questions"]
+            for question in questions:
+                question_ids_by_kind[question["kind"]].append(question["id"])
             order += 1
+        question_ids = [
+            random.Random(f"{module_id}:{kind}").choice(ids)
+            for kind, ids in question_ids_by_kind.items()
+        ]
+        remaining_ids = [
+            question_id
+            for ids in question_ids_by_kind.values()
+            for question_id in ids
+            if question_id not in question_ids
+        ]
+        random.Random(f"{module_id}:exam").shuffle(remaining_ids)
+        question_ids.append(remaining_ids[0])
+        random.Random(f"{module_id}:exam-order").shuffle(question_ids)
         exams[module_id] = {
             "title": f"Контрольная точка: {unit['title']}",
-            "description": f"Четыре коротких вопроса по разделу «{unit['title']}».",
+            "description": f"Четыре вопроса разных типов по разделу «{unit['title']}».",
             "question_ids": question_ids,
         }
     return modules, lessons, exams

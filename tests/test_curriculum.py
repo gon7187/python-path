@@ -110,3 +110,28 @@ def test_lessons_four_to_six_do_not_require_future_topics() -> None:
     assert QUESTION_BY_ID["while-code"]["tests"] == [
         {"kind": "stdout", "expected": "5\n4\n3\n2\n1\nПуск!"}
     ]
+
+
+def test_extended_questions_are_fair_and_exams_are_mixed() -> None:
+    extended_lessons = [lesson for lesson in LESSONS if lesson["order"] >= 13]
+    choice_positions = {
+        question["options"].index(question["answer"])
+        for lesson in extended_lessons
+        for question in lesson["questions"]
+        if question["kind"] == "choice"
+    }
+    assert len(choice_positions) > 1
+    assert (
+        sum(
+            len(question["answers"]) > 1
+            for lesson in extended_lessons
+            for question in lesson["questions"]
+            if question["kind"] == "input"
+        )
+        >= 10
+    )
+    extended_modules = {lesson["module_id"] for lesson in extended_lessons}
+    for module_id in extended_modules:
+        assert {
+            QUESTION_BY_ID[question_id]["kind"] for question_id in EXAMS[module_id]["question_ids"]
+        } == {"choice", "input", "code"}
