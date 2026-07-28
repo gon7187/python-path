@@ -40,6 +40,23 @@ def test_lesson_unlocking_and_progression() -> None:
 def test_extended_course_unlocks_after_foundation() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")
+        for lesson in LESSONS[:12]:
+            save_lesson(lesson["id"], 3, 3, lesson["xp"])
+
+        response = client.get("/api/lessons/operators-arithmetic")
+        assert response.status_code == 200
+        assert response.json()["order"] == 13
+
+        code_check = client.post(
+            "/api/code/check",
+            json={
+                "question_id": "operators-arithmetic-code",
+                "answer": "def increment(value):\n    return value + 1\n",
+            },
+        )
+        assert code_check.status_code == 200
+        assert code_check.json()["correct"] is True
+        client.post("/api/reset")
 
 
 def test_lesson_requires_correct_code_for_completion() -> None:
@@ -70,21 +87,4 @@ def test_lesson_requires_correct_code_for_completion() -> None:
         client.post("/api/reset")
         response = client.post("/api/lessons/hello/submit", json={"answers": code_only})
         assert response.json()["passed"] is False
-        client.post("/api/reset")
-        for lesson in LESSONS[:12]:
-            save_lesson(lesson["id"], 3, 3, lesson["xp"])
-
-        response = client.get("/api/lessons/operators-arithmetic")
-        assert response.status_code == 200
-        assert response.json()["order"] == 13
-
-        code_check = client.post(
-            "/api/code/check",
-            json={
-                "question_id": "operators-arithmetic-code",
-                "answer": "def increment(value):\n    return value + 1\n",
-            },
-        )
-        assert code_check.status_code == 200
-        assert code_check.json()["correct"] is True
         client.post("/api/reset")

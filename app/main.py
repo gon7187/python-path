@@ -192,13 +192,14 @@ def submit_lesson(lesson_id: str, submission: Submission) -> dict:
     question_ids = {question["id"] for question in lesson["questions"]}
     results, correct_count = grade_answers(submission.answers, question_ids)
     total = len(question_ids)
-    code_question_id = next(
+    code_question_ids = [
         question["id"] for question in lesson["questions"] if question["kind"] == "code"
+    ]
+    code_correct = bool(code_question_ids) and all(
+        any(r["question_id"] == question_id and r["correct"] for r in results)
+        for question_id in code_question_ids
     )
-    code_correct = next(
-        item["correct"] for item in results if item["question_id"] == code_question_id
-    )
-    passed = code_correct and correct_count >= 2
+    passed = (not code_question_ids or code_correct) and correct_count * 3 >= total * 2
     gained = 0
     if passed:
         gained, _ = save_lesson(lesson_id, correct_count, total, lesson["xp"])
@@ -213,7 +214,7 @@ def submit_lesson(lesson_id: str, submission: Submission) -> dict:
         if passed
         else (
             "Для зачёта нужно решить задачу на код"
-            if correct_count >= 2 and not code_correct
+            if correct_count * 3 >= total * 2 and not code_correct
             else "Нужно минимум 2 верных ответа из 3. Попробуй ещё раз — это нормально."
         ),
     }
