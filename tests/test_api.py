@@ -75,7 +75,10 @@ def test_extended_course_unlocks_after_foundation() -> None:
             "/api/code/check",
             json={
                 "question_id": "operators-arithmetic-code",
-                "answer": "def increment(value):\n    return value + 1\n",
+                "answer": (
+                    "def calculate_total(price, count, delivery):\n"
+                    "    return price * count + delivery\n"
+                ),
             },
         )
         assert code_check.status_code == 200

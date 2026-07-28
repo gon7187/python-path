@@ -1,4 +1,4 @@
-"""Расширенная часть курса: 27 модулей по 4 микроурока = 108 новых уроков.
+"""Каталог расширенного курса и генератор уроков 26–120.
 
 Материал написан для приложения, а не скопирован из внешних источников. Его порядок
 следует естественной траектории официального Python Tutorial: синтаксис → данные →
@@ -1433,34 +1433,35 @@ def build_extended_course() -> tuple[
         for lesson_index, spec in enumerate(unit["lessons"]):
             slug, title, subtitle, keyword, example, concept, advice = spec
             lesson_id = f"{module_id}-{slug}"
-            questions = _make_questions(lesson_id, spec, TASK_CYCLES[unit_index][lesson_index])
-            lessons.append(
-                {
-                    "id": lesson_id,
-                    "module_id": module_id,
-                    "order": order,
-                    "title": title,
-                    "subtitle": subtitle,
-                    "duration": 11 + lesson_index,
-                    "xp": 35 + (unit_index // 4) * 5,
-                    "theory": [
-                        _theory(title, concept, example, f"Ориентир: {keyword}."),
-                        _theory(
-                            "Когда это применять",
-                            f"{subtitle}. Это маленький инструмент, который становится полезным в большом проекте.",
-                            example,
-                            advice,
-                        ),
-                        _theory(
-                            "Проверка понимания",
-                            "Сформулируй правило своими словами и измени пример так, чтобы увидеть другой результат.",
-                            f"# Тема: {title}\n# Ключевой термин: {keyword}",
-                        ),
-                    ],
-                    "questions": questions,
-                }
-            )
-            question_ids.append(questions[0]["id"])
+            question_ids.append(f"{lesson_id}-choice")
+            if order >= 26:
+                questions = _make_questions(lesson_id, spec, TASK_CYCLES[unit_index][lesson_index])
+                lessons.append(
+                    {
+                        "id": lesson_id,
+                        "module_id": module_id,
+                        "order": order,
+                        "title": title,
+                        "subtitle": subtitle,
+                        "duration": 11 + lesson_index,
+                        "xp": 35 + (unit_index // 4) * 5,
+                        "theory": [
+                            _theory(title, concept, example, f"Ориентир: {keyword}."),
+                            _theory(
+                                "Когда это применять",
+                                f"{subtitle}. Это маленький инструмент, который становится полезным в большом проекте.",
+                                example,
+                                advice,
+                            ),
+                            _theory(
+                                "Проверка понимания",
+                                "Сформулируй правило своими словами и измени пример так, чтобы увидеть другой результат.",
+                                f"# Тема: {title}\n# Ключевой термин: {keyword}",
+                            ),
+                        ],
+                        "questions": questions,
+                    }
+                )
             order += 1
         exams[module_id] = {
             "title": f"Контрольная точка: {unit['title']}",
