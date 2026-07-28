@@ -74,9 +74,9 @@ try:
         else:
             actual = eval(test['call'], namespace, namespace)
         checks.append({'passed': actual == test['expected'], 'actual': repr(actual), 'expected': repr(test['expected'])})
-    print(json.dumps({'ok': all(item['passed'] for item in checks), 'checks': checks}, ensure_ascii=False))
+    print(json.dumps({'ok': all(item['passed'] for item in checks), 'checks': checks, 'stdout': output.getvalue()}, ensure_ascii=False))
 except Exception as error:
-    print(json.dumps({'ok': False, 'error': f'{type(error).__name__}: {error}', 'checks': []}, ensure_ascii=False))
+    print(json.dumps({'ok': False, 'error': f'{type(error).__name__}: {error}', 'checks': [], 'stdout': output.getvalue()}, ensure_ascii=False))
 """
 
 
@@ -87,11 +87,25 @@ def normalize(value: Any) -> str:
 def run_code(source: str, tests: list[dict]) -> dict:
     """Выполняет небольшой фрагмент в отдельном Python-процессе с лимитом времени."""
     if len(source) > 5_000:
-        return {"correct": False, "message": "Решение слишком длинное для этого задания."}
+        return {
+            "correct": False,
+            "message": "Решение слишком длинное для этого задания.",
+            "stdout": "",
+            "stderr": "",
+            "error": "Решение слишком длинное для этого задания.",
+            "timed_out": False,
+        }
     try:
         SafetyVisitor().visit(ast.parse(source))
     except (SyntaxError, ValueError) as error:
-        return {"correct": False, "message": str(error)}
+        return {
+            "correct": False,
+            "message": str(error),
+            "stdout": "",
+            "stderr": "",
+            "error": str(error),
+            "timed_out": False,
+        }
 
     encoded_code = base64.b64encode(source.encode("utf-8")).decode("ascii")
     encoded_tests = base64.b64encode(json.dumps(tests, ensure_ascii=False).encode("utf-8")).decode(
@@ -107,7 +121,14 @@ def run_code(source: str, tests: list[dict]) -> dict:
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return {"correct": False, "message": "Код выполнялся слишком долго. Проверь условие цикла."}
+        return {
+            "correct": False,
+            "message": "Код выполнялся слишком долго. Проверь условие цикла.",
+            "stdout": "",
+            "stderr": "",
+            "error": "Код выполнялся слишком долго. Проверь условие цикла.",
+            "timed_out": True,
+        }
 
     try:
         payload = json.loads(result.stdout.strip().splitlines()[-1])
@@ -115,16 +136,37 @@ def run_code(source: str, tests: list[dict]) -> dict:
         return {
             "correct": False,
             "message": "Не удалось проверить решение. Попробуй упростить код.",
+            "stdout": "",
+            "stderr": result.stderr,
+            "error": "Не удалось проверить решение. Попробуй упростить код.",
+            "timed_out": False,
         }
 
+    run_result = {
+        "stdout": payload.get("stdout", ""),
+        "stderr": result.stderr,
+        "error": payload.get("error"),
+        "timed_out": False,
+    }
     if payload.get("error"):
-        return {"correct": False, "message": f"Почти: {payload['error']}", "checks": []}
+        return {
+            "correct": False,
+            "message": f"Почти: {payload['error']}",
+            "checks": [],
+            **run_result,
+        }
     if payload.get("ok"):
-        return {"correct": True, "message": "Все тесты пройдены!", "checks": payload["checks"]}
+        return {
+            "correct": True,
+            "message": "Все тесты пройдены!",
+            "checks": payload["checks"],
+            **run_result,
+        }
     return {
         "correct": False,
         "message": "Не все тесты прошли. Сверь результат с условием.",
         "checks": payload.get("checks", []),
+        **run_result,
     }
 
 
