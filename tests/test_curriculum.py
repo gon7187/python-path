@@ -1,9 +1,10 @@
 import re
 from pathlib import Path
 
+from app import extended_curriculum
 from app.content import EXAMS, LESSONS, MODULES, QUESTION_BY_ID
-from app.evaluator import evaluate
-from app.extended_curriculum import EXTRA_LESSONS
+from app.evaluator import evaluate, normalize
+from app.extended_curriculum import EXTRA_LESSONS, build_extended_course
 from app.lessons_13_25 import LESSONS_13_25
 
 LESSONS_13_25_IDENTITY = [
@@ -110,3 +111,75 @@ def test_lessons_four_to_six_do_not_require_future_topics() -> None:
     assert QUESTION_BY_ID["while-code"]["tests"] == [
         {"kind": "stdout", "expected": "5\n4\n3\n2\n1\nПуск!"}
     ]
+
+
+def test_extended_questions_are_fair_and_exams_are_mixed() -> None:
+    extended_lessons = [lesson for lesson in LESSONS if lesson["order"] >= 13]
+    choice_positions = [
+        question["options"].index(question["answer"])
+        for lesson in extended_lessons
+        for question in lesson["questions"]
+        if question["kind"] == "choice"
+    ]
+    assert len(set(choice_positions)) > 1
+    assert all(0 <= position < 3 for position in choice_positions)
+    assert (
+        sum(
+            len(question["answers"]) > 1
+            for lesson in extended_lessons
+            for question in lesson["questions"]
+            if question["kind"] == "input"
+        )
+        >= 10
+    )
+    extended_modules = {lesson["module_id"] for lesson in extended_lessons}
+    for module_id in extended_modules:
+        question_ids = EXAMS[module_id]["question_ids"]
+        assert len(question_ids) == len(set(question_ids)) == 4
+        assert {QUESTION_BY_ID[question_id]["kind"] for question_id in question_ids} == {
+            "choice",
+            "input",
+            "code",
+        }
+
+    term_question = next(
+        question
+        for lesson in extended_lessons
+        for question in lesson["questions"]
+        if question["kind"] == "input" and len(question["answers"]) > 1
+    )
+    assert all(
+        normalize(answer) not in normalize(term_question["placeholder"])
+        for answer in term_question["answers"]
+    )
+
+    keyword, synonyms = "sorted", ("сортировка",)
+    answers = next(
+        question["answers"]
+        for lesson in extended_lessons
+        for question in lesson["questions"]
+        if question["kind"] == "input" and keyword in question["answers"]
+    )
+    assert normalize(f"  {synonyms[0].upper()}  ") in {normalize(answer) for answer in answers}
+
+
+def test_extended_generation_is_deterministic_and_handles_short_modules(monkeypatch) -> None:
+    first = build_extended_course()
+    second = build_extended_course()
+    assert first == second
+
+    monkeypatch.setattr(
+        extended_curriculum,
+        "COURSE_UNITS",
+        [
+            {
+                **extended_curriculum.COURSE_UNITS[0],
+                "lessons": extended_curriculum.COURSE_UNITS[0]["lessons"][:1],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        extended_curriculum, "TASK_CYCLES", [extended_curriculum.TASK_CYCLES[0][:1]]
+    )
+    _, _, exams = build_extended_course()
+    assert len(next(iter(exams.values()))["question_ids"]) == 3
