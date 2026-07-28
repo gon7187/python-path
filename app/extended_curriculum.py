@@ -13,6 +13,7 @@ from typing import Any
 from app.lessons_13_25 import LESSONS_13_25
 
 TERM_SYNONYMS = {
+    "sorted": ("сортировка",),
     "арифметический оператор": ("арифметика", "оператор"),
     "оператор %": ("%", "остаток"),
     "оператор and": ("and", "логическое и"),
@@ -1422,7 +1423,7 @@ def _make_questions(
             "kind": "input",
             "prompt": f"Какой ключевой инструмент или термин связывает урок «{title}»?",
             "answers": [keyword, *TERM_SYNONYMS.get(keyword, ())],
-            "placeholder": f"Например: {keyword}",
+            "placeholder": "Введите термин",
             "explanation": f"Ключевой ориентир урока — «{keyword}». {subtitle}.",
         },
         {"id": f"{lesson_id}-code", "kind": "code", **code_task},
@@ -1481,13 +1482,16 @@ def build_extended_course() -> tuple[
                     }
                 )
             else:
-                questions = next(lesson for lesson in LESSONS_13_25 if lesson["id"] == lesson_id)["questions"]
+                questions = next(lesson for lesson in LESSONS_13_25 if lesson["id"] == lesson_id)[
+                    "questions"
+                ]
             for question in questions:
                 question_ids_by_kind[question["kind"]].append(question["id"])
             order += 1
         question_ids = [
             random.Random(f"{module_id}:{kind}").choice(ids)
             for kind, ids in question_ids_by_kind.items()
+            if ids
         ]
         remaining_ids = [
             question_id
@@ -1496,7 +1500,8 @@ def build_extended_course() -> tuple[
             if question_id not in question_ids
         ]
         random.Random(f"{module_id}:exam").shuffle(remaining_ids)
-        question_ids.append(remaining_ids[0])
+        if remaining_ids:
+            question_ids.append(remaining_ids[0])
         random.Random(f"{module_id}:exam-order").shuffle(question_ids)
         exams[module_id] = {
             "title": f"Контрольная точка: {unit['title']}",
