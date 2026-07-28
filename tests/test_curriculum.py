@@ -78,3 +78,14 @@ def test_reference_solutions_for_lessons_13_25_pass_the_runner() -> None:
         code_question = lesson["questions"][2]
         result = evaluate(code_question, code_question["reference"])
         assert result["correct"] is True, (lesson["order"], result)
+
+
+def test_lessons_four_to_six_do_not_require_future_topics() -> None:
+    assert QUESTION_BY_ID["if-result"]["prompt"] == (
+        "Что выведет этот код?\n\nif 3 > 5:\n    print('да')\nelse:\n    print('нет')"
+    )
+    assert QUESTION_BY_ID["if-code"]["tests"] == [{"kind": "stdout", "expected": "Возьми куртку"}]
+    assert QUESTION_BY_ID["for-code"]["tests"] == [{"kind": "stdout", "expected": "1\n2\n3\n4\n5"}]
+    assert QUESTION_BY_ID["while-code"]["tests"] == [
+        {"kind": "stdout", "expected": "5\n4\n3\n2\n1\nПуск!"}
+    ]
