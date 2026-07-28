@@ -94,6 +94,7 @@ def test_lesson_requires_correct_code_for_completion() -> None:
         response = client.post("/api/lessons/hello/submit", json={"answers": two_without_code})
         assert response.json()["passed"] is False
         assert response.json()["message"] == "Для зачёта нужно решить задачу на код"
+        assert client.get("/api/lessons/variables").status_code == 403
 
         code_and_one_other = [
             {"question_id": "hello-print", "answer": "print('неверно')"},
