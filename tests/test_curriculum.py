@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from app.content import EXAMS, LESSONS, MODULES, QUESTION_BY_ID
@@ -90,16 +91,19 @@ def test_lessons_four_to_six_do_not_require_future_topics() -> None:
         == "Что выведет этот код?\n\nif 3 > 5:\n    print('да')\nelse:\n    print('нет')"
     )
 
-    for question_id in ("if-code", "for-code", "while-code"):
+    starters = {
+        "if-code": "temperature = 22\n# твой код\n",
+        "for-code": "# Напиши цикл\n",
+        "while-code": "start = 5\n# твой код\n",
+    }
+    for question_id, starter in starters.items():
         question = QUESTION_BY_ID[question_id]
         assert "def " not in question["prompt"]
         assert "def " not in question["starter"]
-        assert "[" not in question["prompt"]
-        assert "[" not in question["starter"]
+        assert question["starter"] == starter
 
     styles = Path("app/static/styles.css").read_text(encoding="utf-8")
-    assert ".question-prompt" in styles
-    assert "white-space: pre-wrap" in styles
+    assert re.search(r"\.question-prompt\s*\{[^}]*white-space:\s*pre-wrap", styles)
 
     assert QUESTION_BY_ID["if-code"]["tests"] == [{"kind": "stdout", "expected": "Возьми куртку"}]
     assert QUESTION_BY_ID["for-code"]["tests"] == [{"kind": "stdout", "expected": "1\n2\n3\n4\n5"}]
