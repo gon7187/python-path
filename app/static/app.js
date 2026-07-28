@@ -158,7 +158,13 @@ function bindQuestionControls(scope) {
 function showCodeOutput(questionId, result) {
   const node = document.querySelector(`#output-${questionId}`);
   if (!node) return;
-  node.textContent = result.timed_out ? 'Превышено время выполнения.' : result.error || result.stderr || result.stdout || 'Нет вывода.';
+  const output = [
+    result.stdout,
+    result.stderr,
+    result.error,
+    result.timed_out && 'Превышено время выполнения.',
+  ].filter(Boolean);
+  node.textContent = output.join('\n') || 'Нет вывода.';
 }
 
 function showInline(questionId, correct, message, checks = []) {

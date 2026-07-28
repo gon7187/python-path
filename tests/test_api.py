@@ -18,6 +18,16 @@ def test_run_code_returns_stdout_and_blocks_imports() -> None:
         assert blocked.status_code == 200
         assert blocked.json()["error"]
 
+        failed = client.post("/api/code/run", json={"code": "print('a')\n1 / 0"})
+        assert failed.json()["stdout"] == "a\n"
+        assert failed.json()["error"]
+
+        timed_out = client.post("/api/code/run", json={"code": "while True: pass"})
+        assert timed_out.json()["timed_out"] is True
+
+        too_long = client.post("/api/code/run", json={"code": "#" * 5_001})
+        assert too_long.json()["error"]
+
 
 def test_lesson_unlocking_and_progression() -> None:
     with TestClient(app) as client:
