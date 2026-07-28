@@ -5,6 +5,30 @@ from app.db import save_lesson
 from app.main import app
 
 
+def test_run_code_returns_stdout_and_blocks_imports() -> None:
+    with TestClient(app) as client:
+        response = client.post("/api/code/run", json={"code": "print('hi')"})
+        assert response.status_code == 200
+        assert response.json()["stdout"] == "hi\n"
+        assert response.json()["stderr"] == ""
+        assert response.json()["error"] is None
+        assert response.json()["timed_out"] is False
+
+        blocked = client.post("/api/code/run", json={"code": "import os"})
+        assert blocked.status_code == 200
+        assert blocked.json()["error"]
+
+        failed = client.post("/api/code/run", json={"code": "print('a')\n1 / 0"})
+        assert failed.json()["stdout"] == "a\n"
+        assert failed.json()["error"]
+
+        timed_out = client.post("/api/code/run", json={"code": "while True: pass"})
+        assert timed_out.json()["timed_out"] is True
+
+        too_long = client.post("/api/code/run", json={"code": "#" * 5_001})
+        assert too_long.json()["error"]
+
+
 def test_lesson_unlocking_and_progression() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")

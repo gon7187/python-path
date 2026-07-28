@@ -22,7 +22,7 @@ from app.content import (
     public_question,
 )
 from app.db import DATABASE_PATH, connection, init_db, record_attempt, save_exam, save_lesson, state
-from app.evaluator import evaluate
+from app.evaluator import evaluate, run_code
 
 APP_DIR = Path(__file__).parent
 STATIC_DIR = APP_DIR / "static"
@@ -50,6 +50,11 @@ class Submission(BaseModel):
 class CodeCheck(BaseModel):
     question_id: str
     answer: str
+
+
+class CodeRun(BaseModel):
+    code: str
+    question_id: str | None = None
 
 
 def status_for(lesson: dict, saved: dict) -> dict:
@@ -262,6 +267,15 @@ def check_code(payload: CodeCheck) -> dict:
     if not question or question["kind"] != "code":
         raise HTTPException(status_code=404, detail="Кодовое задание не найдено")
     return evaluate(question, payload.answer)
+
+
+@app.post("/api/code/run")
+def run_code_endpoint(payload: CodeRun) -> dict:
+    result = run_code(payload.code, [])
+    return {
+        key: result.get(key, default)
+        for key, default in {"stdout": "", "stderr": "", "error": None, "timed_out": False}.items()
+    }
 
 
 @app.get("/api/exams/{module_id}")

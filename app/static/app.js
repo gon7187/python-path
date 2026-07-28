@@ -102,7 +102,8 @@ function questionTemplate(question, number) {
     field = `<input class="answer-input" data-answer-q="${question.id}" placeholder="${esc(question.placeholder || 'Введите ответ')}" autocomplete="off" />`;
   } else {
     field = `<textarea class="code-editor" data-answer-q="${question.id}" spellcheck="false">${esc(question.starter)}</textarea>
-      <div class="code-actions"><button class="button blue" type="button" data-check-code="${question.id}">▷ Проверить код</button></div>
+      <div class="code-actions"><button class="button blue" type="button" data-check-code="${question.id}">▷ Проверить код</button><button class="button ghost" type="button" data-run-code="${question.id}">▶ Запустить</button></div>
+      <section class="code-output" aria-live="polite"><b>Вывод</b><pre id="output-${question.id}">—</pre></section>
       <details class="hint"><summary>Нужна подсказка?</summary><p>${esc(question.hint)}</p></details>`;
   }
   return `<article class="question-card card" data-question="${question.id}">${head}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
@@ -139,6 +140,31 @@ function bindQuestionControls(scope) {
       button.textContent = '▷ Проверить код';
     });
   });
+  scope.querySelectorAll('[data-run-code]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const questionId = button.dataset.runCode;
+      const editor = scope.querySelector(`[data-answer-q="${questionId}"]`);
+      button.disabled = true;
+      button.textContent = 'Запускаем…';
+      try {
+        showCodeOutput(questionId, await api('/api/code/run', { method: 'POST', body: JSON.stringify({ question_id: questionId, code: editor.value }) }));
+      } catch (error) { showCodeOutput(questionId, { error: error.message }); }
+      button.disabled = false;
+      button.textContent = '▶ Запустить';
+    });
+  });
+}
+
+function showCodeOutput(questionId, result) {
+  const node = document.querySelector(`#output-${questionId}`);
+  if (!node) return;
+  const output = [
+    result.stdout,
+    result.stderr,
+    result.error,
+    result.timed_out && 'Превышено время выполнения.',
+  ].filter(Boolean);
+  node.textContent = output.join('\n') || 'Нет вывода.';
 }
 
 function showInline(questionId, correct, message, checks = []) {
