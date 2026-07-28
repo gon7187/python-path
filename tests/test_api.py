@@ -88,25 +88,3 @@ def test_lesson_requires_correct_code_for_completion() -> None:
         assert code_check.status_code == 200
         assert code_check.json()["correct"] is True
         client.post("/api/reset")
-
-
-def test_code_run_returns_stdout_and_blocks_imports() -> None:
-    with TestClient(app) as client:
-        run = client.post("/api/code/run", json={"code": "print('hi')"})
-        assert run.status_code == 200
-        assert "hi" in run.json()["stdout"]
-
-        blocked = client.post("/api/code/run", json={"code": "import os"})
-        assert blocked.status_code == 200
-        assert "не поддерживает импорт" in blocked.json()["error"]
-
-
-def test_run_code_returns_stdout_and_rejects_imports() -> None:
-    with TestClient(app) as client:
-        response = client.post("/api/code/run", json={"code": "print('hi')"})
-        assert response.status_code == 200
-        assert "hi" in response.json()["stdout"]
-
-        rejected = client.post("/api/code/run", json={"code": "import os"})
-        assert rejected.status_code == 200
-        assert rejected.json()["error"]

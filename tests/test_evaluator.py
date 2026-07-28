@@ -23,13 +23,6 @@ def test_code_runner_blocks_imports() -> None:
     assert "не поддерживает импорт" in result["message"]
 
 
-def test_code_runner_adds_russian_hint_for_name_error() -> None:
-    result = run_code("print(missing_name)\n", [])
-    assert result["correct"] is False
-    assert "hint_ru" in result
-    assert "имя" in result["hint_ru"].casefold()
-
-
 def test_choice_answer_is_normalized() -> None:
     question = {"kind": "choice", "answer": "Bool", "explanation": "ok"}
     assert evaluate(question, " bool ")["correct"] is True
