@@ -1,3 +1,5 @@
+import contextlib
+import io
 import re
 from pathlib import Path
 
@@ -5,7 +7,23 @@ from app import extended_curriculum
 from app.content import EXAMS, LESSONS, MODULES, QUESTION_BY_ID
 from app.evaluator import evaluate, normalize
 from app.extended_curriculum import EXTRA_LESSONS, build_extended_course
+from app.lessons_1_12 import LESSONS_1_12
 from app.lessons_13_25 import LESSONS_13_25
+
+LESSONS_1_12_IDENTITY = [
+    ("hello", "start", 1),
+    ("variables", "start", 2),
+    ("strings-input", "start", 3),
+    ("conditions", "logic", 4),
+    ("for-loop", "logic", 5),
+    ("while-loop", "logic", 6),
+    ("functions", "structures", 7),
+    ("lists", "structures", 8),
+    ("dicts-sets", "structures", 9),
+    ("files", "realworld", 10),
+    ("exceptions", "realworld", 11),
+    ("classes", "realworld", 12),
+]
 
 LESSONS_13_25_IDENTITY = [
     ("operators-arithmetic", "operators", 13),
@@ -50,6 +68,53 @@ def test_every_module_has_a_valid_exam() -> None:
         assert all(question_id in QUESTION_BY_ID for question_id in exam["question_ids"])
 
 
+def test_lessons_1_12_are_reworked_and_keep_their_identity() -> None:
+    assert [
+        (lesson["id"], lesson["module_id"], lesson["order"]) for lesson in LESSONS_1_12
+    ] == LESSONS_1_12_IDENTITY
+    assert LESSONS[:12] == LESSONS_1_12
+
+
+def test_lessons_1_12_have_beginner_theory_and_three_questions() -> None:
+    for lesson in LESSONS_1_12:
+        cards = lesson["theory"]
+        assert len(cards) == 3
+        assert len({card["title"] for card in cards}) == 3
+        assert len({card["example"] for card in cards}) == 3
+        assert 600 <= sum(len(card["text"]) for card in cards) <= 900
+        assert all("# Вывод:" in card["example"] for card in cards)
+        assert any(
+            "ошиб" in (card["title"] + card["text"] + card["tip"]).casefold() for card in cards
+        )
+
+        questions = lesson["questions"]
+        assert [question["kind"] for question in questions] == ["choice", "input", "code"]
+        assert isinstance(questions[1]["answers"], list)
+        assert questions[1]["answers"]
+        assert all(isinstance(answer, str) and answer for answer in questions[1]["answers"])
+
+
+def test_reference_solutions_for_lessons_1_12_pass_the_runner() -> None:
+    for lesson in LESSONS_1_12:
+        code_question = lesson["questions"][2]
+        result = evaluate(code_question, code_question["reference"])
+        assert result["correct"] is True, (lesson["order"], result)
+
+
+def test_theory_examples_for_lessons_1_12_run_cleanly(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    for lesson in LESSONS_1_12:
+        for card in lesson["theory"]:
+            example = card["example"].split("# Вывод:")[0].strip()
+            expected = "\n".join(
+                line[2:] for line in card["example"].split("# Вывод:")[1].strip().splitlines()
+            )
+            namespace: dict = {}
+            with contextlib.redirect_stdout(output := io.StringIO()):
+                exec(example, namespace)
+            assert output.getvalue().strip() == expected.strip(), (lesson["id"], card["title"])
+
+
 def test_lessons_13_25_are_handwritten_and_keep_their_identity() -> None:
     assert [
         (lesson["id"], lesson["module_id"], lesson["order"]) for lesson in LESSONS_13_25
@@ -85,17 +150,17 @@ def test_reference_solutions_for_lessons_13_25_pass_the_runner() -> None:
 
 
 def test_lessons_four_to_six_do_not_require_future_topics() -> None:
-    if_result = QUESTION_BY_ID["if-result"]
-    assert "\n" in if_result["prompt"]
+    conditions_term = QUESTION_BY_ID["conditions-term"]
+    assert "\n" in conditions_term["prompt"]
     assert (
-        if_result["prompt"]
+        conditions_term["prompt"]
         == "Что выведет этот код?\n\nif 3 > 5:\n    print('да')\nelse:\n    print('нет')"
     )
 
     starters = {
-        "if-code": "temperature = 22\n# твой код\n",
-        "for-code": "# Напиши цикл\n",
-        "while-code": "start = 5\n# твой код\n",
+        "conditions-code": "temperature = 22\n# твой код\n",
+        "for-loop-code": "# Напиши цикл\n",
+        "while-loop-code": "start = 5\n# твой код\n",
     }
     for question_id, starter in starters.items():
         question = QUESTION_BY_ID[question_id]
@@ -106,9 +171,13 @@ def test_lessons_four_to_six_do_not_require_future_topics() -> None:
     styles = Path("app/static/styles.css").read_text(encoding="utf-8")
     assert re.search(r"\.question-prompt\s*\{[^}]*white-space:\s*pre-wrap", styles)
 
-    assert QUESTION_BY_ID["if-code"]["tests"] == [{"kind": "stdout", "expected": "Возьми куртку"}]
-    assert QUESTION_BY_ID["for-code"]["tests"] == [{"kind": "stdout", "expected": "1\n2\n3\n4\n5"}]
-    assert QUESTION_BY_ID["while-code"]["tests"] == [
+    assert QUESTION_BY_ID["conditions-code"]["tests"] == [
+        {"kind": "stdout", "expected": "Возьми куртку"}
+    ]
+    assert QUESTION_BY_ID["for-loop-code"]["tests"] == [
+        {"kind": "stdout", "expected": "1\n2\n3\n4\n5"}
+    ]
+    assert QUESTION_BY_ID["while-loop-code"]["tests"] == [
         {"kind": "stdout", "expected": "5\n4\n3\n2\n1\nПуск!"}
     ]
 

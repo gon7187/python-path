@@ -44,8 +44,8 @@ def test_lesson_unlocking_and_progression() -> None:
             "/api/lessons/hello/submit",
             json={
                 "answers": [
-                    {"question_id": "hello-print", "answer": "print('Привет')"},
-                    {"question_id": "hello-string", "answer": "строка"},
+                    {"question_id": "hello-choice", "answer": "print('Привет')"},
+                    {"question_id": "hello-term", "answer": "строка"},
                     {
                         "question_id": "hello-code",
                         "answer": "print('Я начинаю путь в Python!')",
@@ -56,7 +56,7 @@ def test_lesson_unlocking_and_progression() -> None:
         result = response.json()
         assert response.status_code == 200
         assert result["passed"] is True
-        assert result["xp_gained"] == 20
+        assert result["xp_gained"] == 35
         assert client.get("/api/lessons/variables").status_code == 200
         client.post("/api/reset")
 
@@ -90,8 +90,8 @@ def test_lesson_requires_correct_code_for_completion() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")
         two_without_code = [
-            {"question_id": "hello-print", "answer": "print('Привет')"},
-            {"question_id": "hello-string", "answer": "строка"},
+            {"question_id": "hello-choice", "answer": "print('Привет')"},
+            {"question_id": "hello-term", "answer": "строка"},
             {"question_id": "hello-code", "answer": ""},
         ]
         response = client.post("/api/lessons/hello/submit", json={"answers": two_without_code})
@@ -100,16 +100,16 @@ def test_lesson_requires_correct_code_for_completion() -> None:
         assert client.get("/api/lessons/variables").status_code == 403
 
         code_and_one_other = [
-            {"question_id": "hello-print", "answer": "print('неверно')"},
-            {"question_id": "hello-string", "answer": "строка"},
+            {"question_id": "hello-choice", "answer": "print('неверно')"},
+            {"question_id": "hello-term", "answer": "строка"},
             {"question_id": "hello-code", "answer": "print('Я начинаю путь в Python!')"},
         ]
         response = client.post("/api/lessons/hello/submit", json={"answers": code_and_one_other})
         assert response.json()["passed"] is True
 
         code_only = [
-            {"question_id": "hello-print", "answer": "неверно"},
-            {"question_id": "hello-string", "answer": "неверно"},
+            {"question_id": "hello-choice", "answer": "неверно"},
+            {"question_id": "hello-term", "answer": "неверно"},
             {"question_id": "hello-code", "answer": "print('Я начинаю путь в Python!')"},
         ]
         client.post("/api/reset")
