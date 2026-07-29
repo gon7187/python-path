@@ -5,6 +5,30 @@ from app.db import save_lesson
 from app.main import app
 
 
+def test_run_code_returns_stdout_and_blocks_imports() -> None:
+    with TestClient(app) as client:
+        response = client.post("/api/code/run", json={"code": "print('hi')"})
+        assert response.status_code == 200
+        assert response.json()["stdout"] == "hi\n"
+        assert response.json()["stderr"] == ""
+        assert response.json()["error"] is None
+        assert response.json()["timed_out"] is False
+
+        blocked = client.post("/api/code/run", json={"code": "import os"})
+        assert blocked.status_code == 200
+        assert blocked.json()["error"]
+
+        failed = client.post("/api/code/run", json={"code": "print('a')\n1 / 0"})
+        assert failed.json()["stdout"] == "a\n"
+        assert failed.json()["error"]
+
+        timed_out = client.post("/api/code/run", json={"code": "while True: pass"})
+        assert timed_out.json()["timed_out"] is True
+
+        too_long = client.post("/api/code/run", json={"code": "#" * 5_001})
+        assert too_long.json()["error"]
+
+
 def test_lesson_unlocking_and_progression() -> None:
     with TestClient(app) as client:
         client.post("/api/reset")
@@ -51,9 +75,57 @@ def test_extended_course_unlocks_after_foundation() -> None:
             "/api/code/check",
             json={
                 "question_id": "operators-arithmetic-code",
-                "answer": "def increment(value):\n    return value + 1\n",
+                "answer": (
+                    "def calculate_total(price, count, delivery):\n"
+                    "    return price * count + delivery\n"
+                ),
             },
         )
         assert code_check.status_code == 200
         assert code_check.json()["correct"] is True
         client.post("/api/reset")
+
+
+def test_lesson_requires_correct_code_for_completion() -> None:
+    with TestClient(app) as client:
+        client.post("/api/reset")
+        two_without_code = [
+            {"question_id": "hello-print", "answer": "print('Привет')"},
+            {"question_id": "hello-string", "answer": "строка"},
+            {"question_id": "hello-code", "answer": ""},
+        ]
+        response = client.post("/api/lessons/hello/submit", json={"answers": two_without_code})
+        assert response.json()["passed"] is False
+        assert response.json()["message"] == "Для зачёта нужно решить задачу на код"
+        assert client.get("/api/lessons/variables").status_code == 403
+
+        code_and_one_other = [
+            {"question_id": "hello-print", "answer": "print('неверно')"},
+            {"question_id": "hello-string", "answer": "строка"},
+            {"question_id": "hello-code", "answer": "print('Я начинаю путь в Python!')"},
+        ]
+        response = client.post("/api/lessons/hello/submit", json={"answers": code_and_one_other})
+        assert response.json()["passed"] is True
+
+        code_only = [
+            {"question_id": "hello-print", "answer": "неверно"},
+            {"question_id": "hello-string", "answer": "неверно"},
+            {"question_id": "hello-code", "answer": "print('Я начинаю путь в Python!')"},
+        ]
+        client.post("/api/reset")
+        response = client.post("/api/lessons/hello/submit", json={"answers": code_only})
+        assert response.json()["passed"] is False
+        client.post("/api/reset")
+
+
+def test_code_check_includes_translated_error_hint() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/code/check",
+            json={"question_id": "hello-code", "answer": "if True print('Привет')"},
+        )
+
+    result = response.json()
+    assert result["correct"] is False
+    assert result["error_hint"]["title"] == "Синтаксическая ошибка"
+    assert result["error_hint"]["original"].startswith("SyntaxError:")

@@ -22,7 +22,8 @@ from app.content import (
     public_question,
 )
 from app.db import DATABASE_PATH, connection, init_db, record_attempt, save_exam, save_lesson, state
-from app.evaluator import evaluate
+from app.error_hints import translate_error
+from app.evaluator import evaluate, run_code
 
 APP_DIR = Path(__file__).parent
 STATIC_DIR = APP_DIR / "static"
@@ -50,6 +51,11 @@ class Submission(BaseModel):
 class CodeCheck(BaseModel):
     question_id: str
     answer: str
+
+
+class CodeRun(BaseModel):
+    code: str
+    question_id: str | None = None
 
 
 def status_for(lesson: dict, saved: dict) -> dict:
@@ -160,6 +166,8 @@ def grade_answers(items: list[Answer], allowed_ids: set[str]) -> tuple[list[dict
     correct_count = 0
     for question_id in allowed_ids:
         result = evaluate(QUESTION_BY_ID[question_id], provided.get(question_id, ""))
+        if error_text := result.get("error"):
+            result["error_hint"] = translate_error(error_text)
         record_attempt(question_id, result["correct"])
         correct_count += int(result["correct"])
         results.append({"question_id": question_id, **result})
@@ -192,7 +200,14 @@ def submit_lesson(lesson_id: str, submission: Submission) -> dict:
     question_ids = {question["id"] for question in lesson["questions"]}
     results, correct_count = grade_answers(submission.answers, question_ids)
     total = len(question_ids)
-    passed = correct_count >= 2
+    code_question_ids = [
+        question["id"] for question in lesson["questions"] if question["kind"] == "code"
+    ]
+    code_correct = bool(code_question_ids) and all(
+        any(r["question_id"] == question_id and r["correct"] for r in results)
+        for question_id in code_question_ids
+    )
+    passed = (not code_question_ids or code_correct) and correct_count * 3 >= total * 2
     gained = 0
     if passed:
         gained, _ = save_lesson(lesson_id, correct_count, total, lesson["xp"])
@@ -200,11 +215,16 @@ def submit_lesson(lesson_id: str, submission: Submission) -> dict:
         "passed": passed,
         "correct_count": correct_count,
         "total_count": total,
+        "code_correct": code_correct,
         "xp_gained": gained,
         "results": results,
         "message": "Урок пройден! Новый урок уже открыт."
         if passed
-        else "Нужно минимум 2 верных ответа из 3. Попробуй ещё раз — это нормально.",
+        else (
+            "Для зачёта нужно решить задачу на код"
+            if correct_count * 3 >= total * 2 and not code_correct
+            else "Нужно минимум 2 верных ответа из 3. Попробуй ещё раз — это нормально."
+        ),
     }
 
 
@@ -236,6 +256,8 @@ def submit_practice(answer: Answer) -> dict:
     if not question:
         raise HTTPException(status_code=404, detail="Задание не найдено")
     result = evaluate(question, answer.answer)
+    if error_text := result.get("error"):
+        result["error_hint"] = translate_error(error_text)
     record_attempt(answer.question_id, result["correct"])
     gained = 5 if result["correct"] else 0
     if gained:
@@ -249,7 +271,19 @@ def check_code(payload: CodeCheck) -> dict:
     question = QUESTION_BY_ID.get(payload.question_id)
     if not question or question["kind"] != "code":
         raise HTTPException(status_code=404, detail="Кодовое задание не найдено")
-    return evaluate(question, payload.answer)
+    result = evaluate(question, payload.answer)
+    if error_text := result.get("error"):
+        result["error_hint"] = translate_error(error_text)
+    return result
+
+
+@app.post("/api/code/run")
+def run_code_endpoint(payload: CodeRun) -> dict:
+    result = run_code(payload.code, [])
+    return {
+        key: result.get(key, default)
+        for key, default in {"stdout": "", "stderr": "", "error": None, "timed_out": False}.items()
+    }
 
 
 @app.get("/api/exams/{module_id}")

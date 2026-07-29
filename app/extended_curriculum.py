@@ -1,4 +1,4 @@
-"""Расширенная часть курса: 27 модулей по 4 микроурока = 108 новых уроков.
+"""Каталог расширенного курса и генератор уроков 26–120.
 
 Материал написан для приложения, а не скопирован из внешних источников. Его порядок
 следует естественной траектории официального Python Tutorial: синтаксис → данные →
@@ -7,7 +7,24 @@
 
 from __future__ import annotations
 
+import random
 from typing import Any
+
+from app.lessons_13_25 import LESSONS_13_25
+
+TERM_SYNONYMS = {
+    "sorted": ("сортировка",),
+    "арифметический оператор": ("арифметика", "оператор"),
+    "оператор %": ("%", "остаток"),
+    "оператор and": ("and", "логическое и"),
+    "срез": ("slice", "срез строки"),
+    "метод replace": ("replace", "замена"),
+    "метод join": ("join", "соединение строк"),
+    "f-строка": ("f string", "форматированная строка"),
+    "кортеж": ("tuple",),
+    "распаковка": ("unpacking",),
+    "append": ("метод append", "добавление в список"),
+}
 
 
 def _theory(title: str, text: str, example: str, tip: str = "") -> dict[str, str]:
@@ -1389,12 +1406,15 @@ def _make_questions(
 ) -> list[dict[str, Any]]:
     _, title, subtitle, keyword, example, concept, _ = lesson_spec
     code_task = _code_task(task_kind)
+    choice_id = f"{lesson_id}-choice"
+    options = [example, "print('Сначала пишем код, потом думаем')", "value = input() + 1"]
+    random.Random(f"{lesson_id}:{choice_id}").shuffle(options)
     return [
         {
-            "id": f"{lesson_id}-choice",
+            "id": choice_id,
             "kind": "choice",
             "prompt": f"Какой пример относится к теме «{title}»?",
-            "options": [example, "print('Сначала пишем код, потом думаем')", "value = input() + 1"],
+            "options": options,
             "answer": example,
             "explanation": concept,
         },
@@ -1402,8 +1422,8 @@ def _make_questions(
             "id": f"{lesson_id}-term",
             "kind": "input",
             "prompt": f"Какой ключевой инструмент или термин связывает урок «{title}»?",
-            "answers": [keyword],
-            "placeholder": "Например: словарь",
+            "answers": [keyword, *TERM_SYNONYMS.get(keyword, ())],
+            "placeholder": "Введите термин",
             "explanation": f"Ключевой ориентир урока — «{keyword}». {subtitle}.",
         },
         {"id": f"{lesson_id}-code", "kind": "code", **code_task},
@@ -1429,42 +1449,63 @@ def build_extended_course() -> tuple[
                 "icon": unit["icon"],
             }
         )
-        question_ids: list[str] = []
+        question_ids_by_kind: dict[str, list[str]] = {"choice": [], "input": [], "code": []}
         for lesson_index, spec in enumerate(unit["lessons"]):
             slug, title, subtitle, keyword, example, concept, advice = spec
             lesson_id = f"{module_id}-{slug}"
-            questions = _make_questions(lesson_id, spec, TASK_CYCLES[unit_index][lesson_index])
-            lessons.append(
-                {
-                    "id": lesson_id,
-                    "module_id": module_id,
-                    "order": order,
-                    "title": title,
-                    "subtitle": subtitle,
-                    "duration": 11 + lesson_index,
-                    "xp": 35 + (unit_index // 4) * 5,
-                    "theory": [
-                        _theory(title, concept, example, f"Ориентир: {keyword}."),
-                        _theory(
-                            "Когда это применять",
-                            f"{subtitle}. Это маленький инструмент, который становится полезным в большом проекте.",
-                            example,
-                            advice,
-                        ),
-                        _theory(
-                            "Проверка понимания",
-                            "Сформулируй правило своими словами и измени пример так, чтобы увидеть другой результат.",
-                            f"# Тема: {title}\n# Ключевой термин: {keyword}",
-                        ),
-                    ],
-                    "questions": questions,
-                }
-            )
-            question_ids.append(questions[0]["id"])
+            if order >= 26:
+                questions = _make_questions(lesson_id, spec, TASK_CYCLES[unit_index][lesson_index])
+                lessons.append(
+                    {
+                        "id": lesson_id,
+                        "module_id": module_id,
+                        "order": order,
+                        "title": title,
+                        "subtitle": subtitle,
+                        "duration": 11 + lesson_index,
+                        "xp": 35 + (unit_index // 4) * 5,
+                        "theory": [
+                            _theory(title, concept, example, f"Ориентир: {keyword}."),
+                            _theory(
+                                "Когда это применять",
+                                f"{subtitle}. Это маленький инструмент, который становится полезным в большом проекте.",
+                                example,
+                                advice,
+                            ),
+                            _theory(
+                                "Проверка понимания",
+                                "Сформулируй правило своими словами и измени пример так, чтобы увидеть другой результат.",
+                                f"# Тема: {title}\n# Ключевой термин: {keyword}",
+                            ),
+                        ],
+                        "questions": questions,
+                    }
+                )
+            else:
+                questions = next(lesson for lesson in LESSONS_13_25 if lesson["id"] == lesson_id)[
+                    "questions"
+                ]
+            for question in questions:
+                question_ids_by_kind[question["kind"]].append(question["id"])
             order += 1
+        question_ids = [
+            random.Random(f"{module_id}:{kind}").choice(ids)
+            for kind, ids in question_ids_by_kind.items()
+            if ids
+        ]
+        remaining_ids = [
+            question_id
+            for ids in question_ids_by_kind.values()
+            for question_id in ids
+            if question_id not in question_ids
+        ]
+        random.Random(f"{module_id}:exam").shuffle(remaining_ids)
+        if remaining_ids:
+            question_ids.append(remaining_ids[0])
+        random.Random(f"{module_id}:exam-order").shuffle(question_ids)
         exams[module_id] = {
             "title": f"Контрольная точка: {unit['title']}",
-            "description": f"Четыре коротких вопроса по разделу «{unit['title']}».",
+            "description": f"Четыре вопроса разных типов по разделу «{unit['title']}».",
             "question_ids": question_ids,
         }
     return modules, lessons, exams
