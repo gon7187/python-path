@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.content import QUESTION_BY_ID
+from app.main import RETRY_HINT, app
 
 ALLOWED_KEYS = {"question_id", "correct", "message", "explanation", "checks", "error_hint"}
 FORBIDDEN_KEYS = {"answer", "answers", "reference", "tests"}
@@ -44,7 +45,9 @@ def test_check_choice_returns_verdict_and_explanation() -> None:
     assert "error_hint" not in correct
 
     assert wrong["correct"] is False
-    assert wrong["explanation"]
+    assert not wrong.get("explanation")
+    assert wrong["message"] == RETRY_HINT
+    assert QUESTION_BY_ID["hello-choice"]["explanation"] not in wrong["message"]
 
 
 def test_check_input_accepts_known_alternatives() -> None:

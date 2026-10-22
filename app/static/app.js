@@ -162,7 +162,7 @@ function bindQuestionControls(scope) {
       button.textContent = 'Проверяем…';
       try {
         const result = await api('/api/code/check', { method: 'POST', body: JSON.stringify({ question_id: questionId, answer: editor.value }) });
-        showInline(questionId, result.correct, result.message, result.checks, result.error_hint);
+        showVerdict(questionId, result);
       } catch (error) { showInline(questionId, false, error.message); }
       button.disabled = false;
       button.textContent = '▷ Проверить код';
@@ -214,12 +214,12 @@ function showVerdict(questionId, result) {
   const node = document.querySelector(`#result-${questionId}`);
   if (!node) return;
   if (result.correct) {
+    const text = result.explanation || result.message || '';
     node.className = 'inline-result visible ok';
-    node.innerHTML = `<p class="verdict-title">✓ Верно</p><p>${rich(result.explanation || result.message || '')}</p>`;
+    node.innerHTML = `<p class="verdict-title">✓ Верно</p>${text ? `<p>${rich(text)}</p>` : ''}`;
     return;
   }
   const message = result.message || '';
-  const explanation = result.explanation && result.explanation !== message ? `<p>${rich(result.explanation)}</p>` : '';
   const hint = result.error_hint
     ? `<div class="error-hint"><strong>${esc(result.error_hint.title)}</strong><span>${esc(result.error_hint.hint)}</span></div><small class="raw-error">${esc(result.error_hint.original)}</small>`
     : '';
@@ -227,7 +227,7 @@ function showVerdict(questionId, result) {
     ? `<ul class="check-list">${result.checks.map((item) => `<li>${item.passed ? '✓' : '✗'} Ожидалось ${esc(item.expected)}, получено ${esc(item.actual)}</li>`).join('')}</ul>`
     : '';
   node.className = 'inline-result visible no';
-  node.innerHTML = `<p class="verdict-title">↺ Пока неверно</p>${message ? `<p>${rich(message)}</p>` : ''}${explanation}${hint}${checks}`;
+  node.innerHTML = `<p class="verdict-title">↺ Пока неверно</p>${message ? `<p>${rich(message)}</p>` : ''}${hint}${checks}`;
 }
 
 function markOptionVerdict(questionId, correct) {
@@ -560,7 +560,7 @@ async function renderPractice() {
     const answer = getAnswers(form, [question])[0];
     try {
       const result = await api('/api/practice/submit', { method: 'POST', body: JSON.stringify(answer) });
-      showInline(question.id, result.correct, result.message, result.checks, result.error_hint);
+      showVerdict(question.id, result);
       await refreshDashboard();
       if (result.correct) toast(`Верно! +${result.xp_gained} XP`);
     } catch (error) { toast(error.message); }

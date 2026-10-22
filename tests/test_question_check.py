@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.content import QUESTION_BY_ID
 from app.main import app
 
 FORBIDDEN_KEYS = {"answer", "answers", "reference", "tests"}
@@ -13,7 +14,8 @@ def _all_keys(value: object) -> set[str]:
     return set()
 
 
-def test_c1_check_returns_verdict_explanation_and_error_hint() -> None:
+def test_c1_check_returns_verdict_and_error_hint_without_explanation_on_wrong() -> None:
+    wrong_explanation = QUESTION_BY_ID["hello-term"]["explanation"]
     with TestClient(app) as client:
         client.post("/api/reset")
         correct = client.post(
@@ -39,7 +41,10 @@ def test_c1_check_returns_verdict_explanation_and_error_hint() -> None:
     assert wrong.status_code == 200
     assert wrong.json()["question_id"] == "hello-term"
     assert wrong.json()["correct"] is False
-    assert wrong.json()["explanation"]
+    assert not wrong.json().get("explanation")
+    assert isinstance(wrong.json()["message"], str)
+    assert wrong.json()["message"]
+    assert wrong.json()["message"] != wrong_explanation
 
     assert broken_code.status_code == 200
     assert broken_code.json()["correct"] is False
