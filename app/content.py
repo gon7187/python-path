@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import random
+
 from app.extended_curriculum import EXTRA_EXAMS, EXTRA_LESSONS, EXTRA_MODULES
 from app.lessons_1_12 import LESSONS_1_12
 from app.lessons_13_25 import LESSONS_13_25
@@ -97,11 +99,16 @@ QUESTION_BY_ID = {question["id"]: question for item in LESSONS for question in i
 
 
 def public_question(question: dict) -> dict:
-    return {
+    output = {
         key: value
         for key, value in question.items()
         if key not in {"answer", "answers", "tests", "reference"}
     }
+    if question.get("kind") == "choice":
+        options = list(question.get("options", []))
+        random.Random(question["id"]).shuffle(options)
+        output["options"] = options
+    return output
 
 
 def public_lesson(item: dict, include_questions: bool = False) -> dict:
