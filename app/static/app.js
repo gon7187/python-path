@@ -205,6 +205,14 @@ function showVerdict(questionId, result) {
   node.innerHTML = `<p class="verdict-title">↺ Пока неверно</p>${message ? `<p>${rich(message)}</p>` : ''}${explanation}${hint}${checks}`;
 }
 
+function applyVerdictUi(questionId, result) {
+  showVerdict(questionId, result);
+  const check = document.querySelector('[data-lesson-check]');
+  if (check) check.hidden = Boolean(result.correct);
+  const next = document.querySelector('[data-step-next]');
+  if (next) next.hidden = !result.correct;
+}
+
 function submissionResult(result, retryText = 'Попробовать ещё раз') {
   const items = result.results.map((item) => `<div class="result-item ${item.correct ? 'ok' : 'no'}"><b>${item.correct ? '✓ Верно' : '↺ Повтори'}</b> ${esc(item.explanation || item.message || '')}</div>`).join('');
   const action = result.passed
@@ -236,6 +244,7 @@ function startLesson(lesson) {
     index: 0,
     answers: {},
     verdicts: {},
+    checkTokens: {},
     submitting: false,
     summary: null,
   };
@@ -325,6 +334,17 @@ function clearVerdict(questionId) {
   if (next) next.hidden = true;
 }
 
+function setAnswerLocked(questionId, locked) {
+  const scope = document.querySelector('.step-question');
+  if (!scope) return;
+  scope.querySelectorAll(`[data-answer-q="${questionId}"]`).forEach((node) => {
+    node.readOnly = locked;
+  });
+  scope.querySelectorAll(`[data-choice-q="${questionId}"]`).forEach((node) => {
+    node.disabled = locked;
+  });
+}
+
 function captureCurrentAnswer() {
   const state = lessonState;
   if (!state) return;
@@ -356,7 +376,7 @@ function bindStep(step) {
     if (state.answers[question.id] === button.dataset.value) button.classList.add('selected');
     button.addEventListener('click', () => syncAnswer(question.id, button.dataset.value));
   });
-  if (state.verdicts[question.id]) showVerdict(question.id, state.verdicts[question.id]);
+  if (state.verdicts[question.id]) applyVerdictUi(question.id, state.verdicts[question.id]);
   document.querySelector('[data-lesson-check]')?.addEventListener('click', (event) => checkStep(question.id, event.currentTarget));
   document.querySelector('[data-step-next]')?.addEventListener('click', goNext);
   document.querySelector('[data-step-back]')?.addEventListener('click', goBack);
@@ -387,26 +407,33 @@ async function checkStep(questionId, button) {
   if (!state) return;
   captureCurrentAnswer();
   const answer = state.answers[questionId] ?? '';
+  const token = (state.checkTokens[questionId] || 0) + 1;
+  state.checkTokens[questionId] = token;
   const label = button.textContent;
   button.disabled = true;
   button.textContent = 'Проверяем…';
+  setAnswerLocked(questionId, true);
   try {
     const result = await api(`/api/lessons/${state.lesson.id}/check`, { method: 'POST', body: JSON.stringify({ question_id: questionId, answer }) });
+    if (lessonState !== state || state.checkTokens[questionId] !== token) return;
+    // Ответ мог измениться, пока шёл запрос: вердикт относится только к отправленному ответу.
+    const field = document.querySelector(`[data-answer-q="${questionId}"]`);
+    if (field && field.value !== answer) return;
+    if ((state.answers[questionId] ?? '') !== answer) return;
     state.verdicts[questionId] = result;
-    button.hidden = Boolean(result.correct);
     const step = state.steps[state.index];
     if (step && step.kind === 'question' && step.question.id === questionId) {
-      showVerdict(questionId, result);
-      const check = document.querySelector('[data-lesson-check]');
-      if (check) check.hidden = Boolean(result.correct);
-      const next = document.querySelector('[data-step-next]');
-      if (next) next.hidden = !result.correct;
+      applyVerdictUi(questionId, result);
     }
   } catch (error) {
-    if (lessonState === state) toast(error.message);
+    if (lessonState === state && state.checkTokens[questionId] === token) toast(error.message);
+  } finally {
+    if (lessonState === state && state.checkTokens[questionId] === token) {
+      setAnswerLocked(questionId, false);
+      button.disabled = false;
+      button.textContent = label;
+    }
   }
-  button.disabled = false;
-  button.textContent = label;
 }
 
 async function runExample(event) {
@@ -546,7 +573,7 @@ document.querySelector('#reset-button').addEventListener('click', async () => {
 
 document.addEventListener('keydown', (event) => {
   const editor = event.target.closest('.code-editor');
-  if (!editor) return;
+  if (!editor || editor.readOnly || editor.disabled) return;
   const { value, selectionStart: start, selectionEnd: end } = editor;
   const lineStart = value.lastIndexOf('\n', start - 1) + 1;
   const lineEndIndex = value.indexOf('\n', Math.max(start, end - 1));

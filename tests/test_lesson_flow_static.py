@@ -128,3 +128,38 @@ def test_served_app_js_contains_step_flow_contract() -> None:
     assert "Шаг " in script.text
     assert re.search(r"/api/lessons/\$\{[^}]+\}/check", script.text)
     assert re.search(r"/api/lessons/\$\{[^}]+\}/submit", script.text)
+
+
+def test_check_verdict_is_bound_to_submitted_answer_and_locks_editor() -> None:
+    js = _app_js()
+    start = js.index("async function checkStep")
+    end = js.index("async function runExample", start)
+    body = js[start:end]
+
+    # Отправленный ответ запоминается и сравнивается с текущим: вердикт от
+    # устаревшего ответа не должен открывать «Дальше».
+    assert "const answer = state.answers[questionId] ?? ''" in body
+    assert "JSON.stringify({ question_id: questionId, answer })" in body
+    assert "field.value !== answer" in body
+    assert "(state.answers[questionId] ?? '') !== answer" in body
+    assert "state.verdicts[questionId] = result" in body
+    assert "state.checkTokens[questionId] !== token" in body
+
+    # Пока запрос в полёте, поле/редактор и варианты ответа блокируются.
+    assert "setAnswerLocked(questionId, true)" in body
+    assert "setAnswerLocked(questionId, false)" in body
+
+    # Readonly-редактор не должен обрабатывать Tab/Enter как правку кода.
+    assert "if (!editor || editor.readOnly || editor.disabled) return;" in js
+
+    lock_start = js.index("function setAnswerLocked")
+    lock_end = js.index("function captureCurrentAnswer", lock_start)
+    lock_body = js[lock_start:lock_end]
+    assert "node.readOnly = locked" in lock_body
+    assert "node.disabled = locked" in lock_body
+
+    # Возврат к уже проверенному заданию восстанавливает и плашку, и «Дальше».
+    bind_start = js.index("function bindStep")
+    bind_end = js.index("function goNext", bind_start)
+    assert "applyVerdictUi(question.id, state.verdicts[question.id])" in js[bind_start:bind_end]
+
