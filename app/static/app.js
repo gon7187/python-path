@@ -190,11 +190,11 @@ function showVerdict(questionId, result) {
   if (!node) return;
   if (result.correct) {
     node.className = 'inline-result visible ok';
-    node.innerHTML = `<p class="verdict-title">✓ Верно</p><p>${esc(result.explanation || result.message || '')}</p>`;
+    node.innerHTML = `<p class="verdict-title">✓ Верно</p><p>${rich(result.explanation || result.message || '')}</p>`;
     return;
   }
   const message = result.message || '';
-  const explanation = result.explanation && result.explanation !== message ? `<p>${esc(result.explanation)}</p>` : '';
+  const explanation = result.explanation && result.explanation !== message ? `<p>${rich(result.explanation)}</p>` : '';
   const hint = result.error_hint
     ? `<div class="error-hint"><strong>${esc(result.error_hint.title)}</strong><span>${esc(result.error_hint.hint)}</span></div><small class="raw-error">${esc(result.error_hint.original)}</small>`
     : '';
@@ -202,7 +202,7 @@ function showVerdict(questionId, result) {
     ? `<ul class="check-list">${result.checks.map((item) => `<li>${item.passed ? '✓' : '✗'} Ожидалось ${esc(item.expected)}, получено ${esc(item.actual)}</li>`).join('')}</ul>`
     : '';
   node.className = 'inline-result visible no';
-  node.innerHTML = `<p class="verdict-title">↺ Пока неверно</p>${message ? `<p>${esc(message)}</p>` : ''}${explanation}${hint}${checks}`;
+  node.innerHTML = `<p class="verdict-title">↺ Пока неверно</p>${message ? `<p>${rich(message)}</p>` : ''}${explanation}${hint}${checks}`;
 }
 
 function submissionResult(result, retryText = 'Попробовать ещё раз') {
@@ -393,12 +393,17 @@ async function checkStep(questionId, button) {
   try {
     const result = await api(`/api/lessons/${state.lesson.id}/check`, { method: 'POST', body: JSON.stringify({ question_id: questionId, answer }) });
     state.verdicts[questionId] = result;
-    showVerdict(questionId, result);
     button.hidden = Boolean(result.correct);
-    const next = document.querySelector('[data-step-next]');
-    if (next) next.hidden = !result.correct;
+    const step = state.steps[state.index];
+    if (step && step.kind === 'question' && step.question.id === questionId) {
+      showVerdict(questionId, result);
+      const check = document.querySelector('[data-lesson-check]');
+      if (check) check.hidden = Boolean(result.correct);
+      const next = document.querySelector('[data-step-next]');
+      if (next) next.hidden = !result.correct;
+    }
   } catch (error) {
-    toast(error.message);
+    if (lessonState === state) toast(error.message);
   }
   button.disabled = false;
   button.textContent = label;
