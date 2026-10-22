@@ -205,8 +205,22 @@ function showVerdict(questionId, result) {
   node.innerHTML = `<p class="verdict-title">↺ Пока неверно</p>${message ? `<p>${rich(message)}</p>` : ''}${explanation}${hint}${checks}`;
 }
 
+function markOptionVerdict(questionId, correct) {
+  clearOptionVerdicts(questionId);
+  document.querySelectorAll(`[data-choice-q="${questionId}"]`).forEach((option) => {
+    if (option.classList.contains('selected')) option.classList.add(correct ? 'is-right' : 'is-wrong');
+  });
+}
+
+function clearOptionVerdicts(questionId) {
+  document.querySelectorAll(`[data-choice-q="${questionId}"]`).forEach((option) => {
+    option.classList.remove('is-right', 'is-wrong');
+  });
+}
+
 function applyVerdictUi(questionId, result) {
   showVerdict(questionId, result);
+  markOptionVerdict(questionId, Boolean(result.correct));
   const check = document.querySelector('[data-lesson-check]');
   if (check) check.hidden = Boolean(result.correct);
   const next = document.querySelector('[data-step-next]');
@@ -320,6 +334,7 @@ function syncAnswer(questionId, value) {
 }
 
 function clearVerdict(questionId) {
+  clearOptionVerdicts(questionId);
   const state = lessonState;
   if (!state || !state.verdicts[questionId]) return;
   delete state.verdicts[questionId];
