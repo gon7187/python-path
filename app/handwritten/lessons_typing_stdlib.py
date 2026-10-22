@@ -646,12 +646,12 @@ LESSONS: list[dict[str, Any]] = [
                 "\n"
                 "import random\n"
                 "\n"
-                "items = [1, 2, 3, 4]\n"
-                "random.Random(7).shuffle(items)\n"
-                "print(items)",
-                ["[4, 2, 1, 3]", "[4, 1, 2, 3]", "[3, 1, 2, 4]", "[1, 2, 3, 4]"],
-                "[4, 2, 1, 3]",
-                "Один и тот же seed 7 даёт одну и ту же перестановку, поэтому вывод стабилен.",
+                "a = random.Random(7).randint(1, 100)\n"
+                "b = random.Random(7).randint(1, 100)\n"
+                "print(a == b)",
+                ["True", "False", "None", "ошибка"],
+                "True",
+                "Оба генератора созданы с одним seed 7, поэтому выдают одно и то же число.",
             ),
             _term(
                 "stdlib-core-random",
