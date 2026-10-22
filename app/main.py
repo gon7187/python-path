@@ -165,6 +165,24 @@ def require_lesson(lesson_id: str) -> dict:
     return lesson
 
 
+RETRY_HINT = "Пока неверно. Перечитай условие и попробуй ещё раз."
+
+
+def public_answer_result(question: dict, result: dict) -> dict:
+    """Готовит ответ на одиночную проверку, не раскрывая решение заранее.
+
+    Объяснение показывается только после верного ответа. Итоговые проверки
+    урока и экзамена используют ``grade_answers`` и это правило не применяют.
+    """
+    visible = dict(result)
+    if visible["correct"]:
+        visible["explanation"] = visible.get("explanation") or question.get("explanation", "")
+    else:
+        visible.pop("explanation", None)
+        visible["message"] = RETRY_HINT
+    return visible
+
+
 def grade_answers(items: list[Answer], allowed_ids: set[str]) -> tuple[list[dict], int]:
     provided = {item.question_id: item.answer for item in items if item.question_id in allowed_ids}
     results = []
@@ -241,13 +259,13 @@ def check_lesson_answer(lesson_id: str, payload: QuestionCheck) -> dict:
     )
     if question is None:
         raise HTTPException(status_code=404, detail="Задание не найдено в этом уроке")
-    result = evaluate(question, payload.answer)
+    result = public_answer_result(question, evaluate(question, payload.answer))
     record_attempt(question["id"], result["correct"])
     response = {
         "question_id": question["id"],
         "correct": result["correct"],
         "message": result["message"],
-        "explanation": result.get("explanation") or question.get("explanation", ""),
+        "explanation": result.get("explanation", ""),
     }
     if "checks" in result:
         response["checks"] = result["checks"]
@@ -283,7 +301,7 @@ def submit_practice(answer: Answer) -> dict:
     question = QUESTION_BY_ID.get(answer.question_id)
     if not question:
         raise HTTPException(status_code=404, detail="Задание не найдено")
-    result = evaluate(question, answer.answer)
+    result = public_answer_result(question, evaluate(question, answer.answer))
     if error_text := result.get("error"):
         result["error_hint"] = translate_error(error_text)
     record_attempt(answer.question_id, result["correct"])
@@ -299,7 +317,7 @@ def check_code(payload: CodeCheck) -> dict:
     question = QUESTION_BY_ID.get(payload.question_id)
     if not question or question["kind"] != "code":
         raise HTTPException(status_code=404, detail="Кодовое задание не найдено")
-    result = evaluate(question, payload.answer)
+    result = public_answer_result(question, evaluate(question, payload.answer))
     if error_text := result.get("error"):
         result["error_hint"] = translate_error(error_text)
     return result
