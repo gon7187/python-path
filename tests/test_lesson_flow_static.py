@@ -162,4 +162,3 @@ def test_check_verdict_is_bound_to_submitted_answer_and_locks_editor() -> None:
     bind_start = js.index("function bindStep")
     bind_end = js.index("function goNext", bind_start)
     assert "applyVerdictUi(question.id, state.verdicts[question.id])" in js[bind_start:bind_end]
-
