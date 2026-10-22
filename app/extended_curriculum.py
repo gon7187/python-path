@@ -1401,6 +1401,38 @@ TASK_CYCLES = [
 ]
 
 
+def _handwritten_registry() -> dict[str, dict[str, Any]]:
+    """Ленивый импорт реестра, чтобы не создавать циклический импорт модулей."""
+    from app.handwritten import HANDWRITTEN
+
+    return HANDWRITTEN
+
+
+def _extended_lesson_orders() -> dict[str, int]:
+    """Возвращает id уроков 26–120 из базового каталога и их порядок.
+
+    Считается один раз при импорте модуля, поэтому подмена ``COURSE_UNITS``
+    в тестах не превращает валидный рукописный урок в «неизвестный id».
+    """
+    orders: dict[str, int] = {}
+    order = 13
+    for unit in COURSE_UNITS:
+        for spec in unit["lessons"]:
+            if order >= 26:
+                orders[f"{unit['id']}-{spec[0]}"] = order
+            order += 1
+    return orders
+
+
+EXTENDED_LESSON_ORDERS = _extended_lesson_orders()
+
+
+def _validate_handwritten_ids(handwritten: dict[str, dict[str, Any]]) -> None:
+    unknown = sorted(set(handwritten) - set(EXTENDED_LESSON_ORDERS))
+    if unknown:
+        raise ValueError(f"Рукописный урок {unknown[0]}: такого id нет среди уроков 26–120")
+
+
 def _make_questions(
     lesson_id: str, lesson_spec: tuple[str, str, str, str, str, str, str], task_kind: str
 ) -> list[dict[str, Any]]:
@@ -1436,6 +1468,8 @@ def build_extended_course() -> tuple[
     modules: list[dict[str, Any]] = []
     lessons: list[dict[str, Any]] = []
     exams: dict[str, dict[str, Any]] = {}
+    handwritten = _handwritten_registry()
+    _validate_handwritten_ids(handwritten)
     colors = ["sky", "violet", "sun", "mint"]
     order = 13
     for unit_index, unit in enumerate(COURSE_UNITS):
@@ -1455,32 +1489,37 @@ def build_extended_course() -> tuple[
             lesson_id = f"{module_id}-{slug}"
             if order >= 26:
                 questions = _make_questions(lesson_id, spec, TASK_CYCLES[unit_index][lesson_index])
-                lessons.append(
-                    {
-                        "id": lesson_id,
-                        "module_id": module_id,
-                        "order": order,
-                        "title": title,
-                        "subtitle": subtitle,
-                        "duration": 11 + lesson_index,
-                        "xp": 35 + (unit_index // 4) * 5,
-                        "theory": [
-                            _theory(title, concept, example, f"Ориентир: {keyword}."),
-                            _theory(
-                                "Когда это применять",
-                                f"{subtitle}. Это маленький инструмент, который становится полезным в большом проекте.",
-                                example,
-                                advice,
-                            ),
-                            _theory(
-                                "Проверка понимания",
-                                "Сформулируй правило своими словами и измени пример так, чтобы увидеть другой результат.",
-                                f"# Тема: {title}\n# Ключевой термин: {keyword}",
-                            ),
-                        ],
-                        "questions": questions,
-                    }
-                )
+                lesson: dict[str, Any] = {
+                    "id": lesson_id,
+                    "module_id": module_id,
+                    "order": order,
+                    "title": title,
+                    "subtitle": subtitle,
+                    "duration": 11 + lesson_index,
+                    "xp": 35 + (unit_index // 4) * 5,
+                    "theory": [
+                        _theory(title, concept, example, f"Ориентир: {keyword}."),
+                        _theory(
+                            "Когда это применять",
+                            f"{subtitle}. Это маленький инструмент, который становится полезным в большом проекте.",
+                            example,
+                            advice,
+                        ),
+                        _theory(
+                            "Проверка понимания",
+                            "Сформулируй правило своими словами и измени пример так, чтобы увидеть другой результат.",
+                            f"# Тема: {title}\n# Ключевой термин: {keyword}",
+                        ),
+                    ],
+                    "questions": questions,
+                }
+                handwritten_lesson = handwritten.get(lesson_id)
+                if handwritten_lesson is not None:
+                    lesson["theory"] = handwritten_lesson["theory"]
+                    lesson["questions"] = handwritten_lesson["questions"]
+                    if "subtitle" in handwritten_lesson:
+                        lesson["subtitle"] = handwritten_lesson["subtitle"]
+                lessons.append(lesson)
             else:
                 questions = next(lesson for lesson in LESSONS_13_25 if lesson["id"] == lesson_id)[
                     "questions"
