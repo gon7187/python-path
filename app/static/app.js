@@ -94,12 +94,37 @@ function renderModule(module) {
   </section>`;
 }
 
+// Делит prompt на первую строку-вопрос и остаток-код. Обёрнутые целиком в бэктики
+// фрагменты (встречаются в уроках 57–64) освобождаются от них.
+function splitQuestionPrompt(value = '') {
+  const text = String(value);
+  const breakAt = text.indexOf('\n');
+  const question = breakAt === -1 ? text : text.slice(0, breakAt);
+  let code = breakAt === -1 ? '' : text.slice(breakAt + 1).trim();
+  if (code.length >= 2 && code.startsWith('`') && code.endsWith('`')) code = code.slice(1, -1).trim();
+  return { question, code };
+}
+
+function questionPromptTemplate(question) {
+  if (question.kind === 'choice' || question.kind === 'input') {
+    const parts = splitQuestionPrompt(question.prompt);
+    const code = parts.code ? `<pre class="code-example"><code>${esc(parts.code)}</code></pre>` : '';
+    return `<div class="question-prompt">${rich(parts.question)}</div>${code}`;
+  }
+  return `<div class="question-prompt">${rich(question.prompt)}</div>`;
+}
+
 function questionTemplate(question, number, options = {}) {
   const lessonMode = Boolean(options.lessonId);
-  const head = `<div class="question-number">Задание ${number}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
+  const head = `<div class="question-number">Задание ${number}</div>${questionPromptTemplate(question)}`;
   let field = '';
   if (question.kind === 'choice') {
-    field = `<div class="options">${question.options.map((option) => `<button type="button" class="option" data-choice-q="${question.id}" data-value="${esc(option)}">${esc(option)}</button>`).join('')}</div>`;
+    field = `<div class="options">${question.options.map((option) => {
+      const value = esc(option);
+      return String(option).includes('\n')
+        ? `<button type="button" class="option option-multiline" data-choice-q="${question.id}" data-value="${value}">${value}</button>`
+        : `<button type="button" class="option" data-choice-q="${question.id}" data-value="${value}">${value}</button>`;
+    }).join('')}</div>`;
   } else if (question.kind === 'input') {
     field = `<input class="answer-input" data-answer-q="${question.id}" placeholder="${esc(question.placeholder || 'Введите ответ')}" autocomplete="off" />`;
   } else {
