@@ -74,12 +74,7 @@ LESSONS: list[dict[str, Any]] = [
                 "Global — на уровне модуля и в конце Builtins — среди встроенных имён. "
                 "Если имя не найдено нигде, появляется NameError. В простом случае функция "
                 "без собственной переменной спокойно читает глобальную.",
-                "name = 'глобально'\n"
-                "def show():\n"
-                "    print(name)\n"
-                "show()\n"
-                "# Вывод:\n"
-                "# глобально",
+                "name = 'глобально'\ndef show():\n    print(name)\nshow()\n# Вывод:\n# глобально",
                 "Читать глобальное имя можно, а присваивать его внутри функции — уже другая история.",
             ),
             _card(
@@ -120,10 +115,7 @@ LESSONS: list[dict[str, Any]] = [
         "questions": [
             _choice(
                 "scope-legb",
-                "Что выведет код?\n\nname = 'глобально'\n"
-                "def show():\n"
-                "    print(name)\n"
-                "show()",
+                "Что выведет код?\n\nname = 'глобально'\ndef show():\n    print(name)\nshow()",
                 [
                     "глобально",
                     "локально",
@@ -143,18 +135,12 @@ LESSONS: list[dict[str, Any]] = [
                 "scope-legb",
                 "Напиши `price_with_tax(price)`, которая читает глобальную константу модуля "
                 "`TAX = 0.2` и возвращает `round(price * (1 + TAX), 2)`.",
-                "TAX = 0.2\n"
-                "\n"
-                "def price_with_tax(price):\n"
-                "    pass\n",
+                "TAX = 0.2\n\ndef price_with_tax(price):\n    pass\n",
                 [
                     {"kind": "call", "call": "price_with_tax(100)", "expected": 120.0},
                     {"kind": "call", "call": "price_with_tax(0)", "expected": 0.0},
                 ],
-                "TAX = 0.2\n"
-                "\n"
-                "def price_with_tax(price):\n"
-                "    return round(price * (1 + TAX), 2)\n",
+                "TAX = 0.2\n\ndef price_with_tax(price):\n    return round(price * (1 + TAX), 2)\n",
                 "Функция нашла `TAX` в глобальной области и посчитала цену с налогом.",
                 "Объяви `TAX` на уровне модуля, а внутри функции просто прочитай его.",
             ),
@@ -247,8 +233,7 @@ LESSONS: list[dict[str, Any]] = [
                 "Напиши `add_item(item, basket=None)`: если корзину не передали, начни новый "
                 "список, добавь `item` и верни корзину. Изменяемого значения по умолчанию быть "
                 "не должно.",
-                "def add_item(item, basket=None):\n"
-                "    pass\n",
+                "def add_item(item, basket=None):\n    pass\n",
                 [
                     {"kind": "call", "call": "add_item('a')", "expected": ["a"]},
                     {"kind": "call", "call": "add_item('b')", "expected": ["b"]},
@@ -346,8 +331,7 @@ LESSONS: list[dict[str, Any]] = [
                 "scope-closures",
                 "Напиши `make_multiplier(k)`, которая возвращает функцию от `x`, умножающую `x` "
                 "на `k`. Используй замыкание.",
-                "def make_multiplier(k):\n"
-                "    pass\n",
+                "def make_multiplier(k):\n    pass\n",
                 [
                     {"kind": "call", "call": "make_multiplier(3)(4)", "expected": 12},
                     {"kind": "call", "call": "make_multiplier(0)(9)", "expected": 0},
@@ -371,10 +355,7 @@ LESSONS: list[dict[str, Any]] = [
                 "Отдельного `return` здесь нет. Такую функцию удобно передать туда, где нужна "
                 "маленькая операция на один раз. Если логика длиннее одного выражения, лучше "
                 "объявить обычную функцию с именем.",
-                "double = lambda x: x * 2\n"
-                "print(double(5))\n"
-                "# Вывод:\n"
-                "# 10",
+                "double = lambda x: x * 2\nprint(double(5))\n# Вывод:\n# 10",
                 "lambda возвращает результат выражения, поэтому `return` внутри не пишут.",
             ),
             _card(
@@ -409,9 +390,7 @@ LESSONS: list[dict[str, Any]] = [
         "questions": [
             _choice(
                 "scope-lambda-key",
-                "Что выведет код?\n\n"
-                "words = ['мама', 'папа', 'я']\n"
-                "print(sorted(words, key=len))",
+                "Что выведет код?\n\nwords = ['мама', 'папа', 'я']\nprint(sorted(words, key=len))",
                 [
                     "['я', 'мама', 'папа']",
                     "['мама', 'папа', 'я']",
@@ -431,8 +410,7 @@ LESSONS: list[dict[str, Any]] = [
                 "scope-lambda-key",
                 "Напиши `by_last_letter(words)`, которая возвращает новый список слов, "
                 "отсортированный по последней букве. Используй `sorted` и `key=lambda`.",
-                "def by_last_letter(words):\n"
-                "    pass\n",
+                "def by_last_letter(words):\n    pass\n",
                 [
                     {
                         "kind": "call",
@@ -441,8 +419,7 @@ LESSONS: list[dict[str, Any]] = [
                     },
                     {"kind": "call", "call": "by_last_letter([])", "expected": []},
                 ],
-                "def by_last_letter(words):\n"
-                "    return sorted(words, key=lambda word: word[-1])\n",
+                "def by_last_letter(words):\n    return sorted(words, key=lambda word: word[-1])\n",
                 "lambda взяла последний символ слова, и `sorted` расставил слова по нему.",
                 "Передай в `key` функцию `lambda word: word[-1]`.",
             ),
@@ -458,10 +435,7 @@ LESSONS: list[dict[str, Any]] = [
                 "и источником. Python берёт каждый элемент источника, вычисляет выражение и "
                 "кладёт результат в новый список. Исходная коллекция не меняется. Так простая "
                 "операция над каждым элементом занимает одну понятную строку.",
-                "squares = [n * n for n in range(1, 5)]\n"
-                "print(squares)\n"
-                "# Вывод:\n"
-                "# [1, 4, 9, 16]",
+                "squares = [n * n for n in range(1, 5)]\nprint(squares)\n# Вывод:\n# [1, 4, 9, 16]",
                 "Сначала найди `for`: что перебираем, потом выражение: что с этим делаем.",
             ),
             _card(
@@ -485,10 +459,7 @@ LESSONS: list[dict[str, Any]] = [
                 "Ошибка не вызывает исключения: список просто получается другим. Заметь её "
                 "по первому и последнему элементу. Для чисел от 1 до 4 нужен `range(1, 5)`: "
                 "начало включается, а конец — нет.",
-                "squares = [n * n for n in range(4)]\n"
-                "print(squares)\n"
-                "# Вывод:\n"
-                "# [0, 1, 4, 9]",
+                "squares = [n * n for n in range(4)]\nprint(squares)\n# Вывод:\n# [0, 1, 4, 9]",
                 "Проверь начало и конец диапазона на маленьком примере.",
             ),
         ],
@@ -520,14 +491,12 @@ LESSONS: list[dict[str, Any]] = [
                 "comprehensions-list-comprehension",
                 "Напиши `squares(n)`, которая возвращает список квадратов чисел от 1 до `n` "
                 "включительно. Используй list comprehension.",
-                "def squares(n):\n"
-                "    pass\n",
+                "def squares(n):\n    pass\n",
                 [
                     {"kind": "call", "call": "squares(4)", "expected": [1, 4, 9, 16]},
                     {"kind": "call", "call": "squares(0)", "expected": []},
                 ],
-                "def squares(n):\n"
-                "    return [number * number for number in range(1, n + 1)]\n",
+                "def squares(n):\n    return [number * number for number in range(1, n + 1)]\n",
                 "`range(1, n + 1)` включает число `n`, а генератор сразу собирает квадраты.",
                 "Не забудь про `n + 1`: правый конец `range` не включается.",
             ),
@@ -603,15 +572,13 @@ LESSONS: list[dict[str, Any]] = [
                 "comprehensions-comprehension-filter",
                 "Напиши `evens(items)`, которая возвращает только чётные числа из списка. "
                 "Используй comprehension с условием.",
-                "def evens(items):\n"
-                "    pass\n",
+                "def evens(items):\n    pass\n",
                 [
                     {"kind": "call", "call": "evens([1, 2, 3, 4])", "expected": [2, 4]},
                     {"kind": "call", "call": "evens([])", "expected": []},
                     {"kind": "call", "call": "evens([-2, -1, 0, 3])", "expected": [-2, 0]},
                 ],
-                "def evens(items):\n"
-                "    return [item for item in items if item % 2 == 0]\n",
+                "def evens(items):\n    return [item for item in items if item % 2 == 0]\n",
                 "Условие `item % 2 == 0` пропустило только чётные числа, включая ноль.",
                 "Поставь `if item % 2 == 0` после `for item in items`.",
             ),
@@ -687,8 +654,7 @@ LESSONS: list[dict[str, Any]] = [
                 "comprehensions-dict-comprehension",
                 "Напиши `initials(words)`, которая возвращает множество первых букв слов в "
                 "нижнем регистре. Используй set comprehension.",
-                "def initials(words):\n"
-                "    pass\n",
+                "def initials(words):\n    pass\n",
                 [
                     {
                         "kind": "call",
@@ -697,8 +663,7 @@ LESSONS: list[dict[str, Any]] = [
                     },
                     {"kind": "call", "call": "initials([]) == set()", "expected": True},
                 ],
-                "def initials(words):\n"
-                "    return {word[0].lower() for word in words}\n",
+                "def initials(words):\n    return {word[0].lower() for word in words}\n",
                 "Множество оставило по одной букве `а` и `б`, а `lower()` убрал разницу регистра.",
                 "Возьми `word[0]`, приведи к нижнему регистру и собери результат в `{}`.",
             ),
@@ -774,8 +739,7 @@ LESSONS: list[dict[str, Any]] = [
                 "comprehensions-nested-comprehension",
                 "Напиши `flatten(matrix)`, которая превращает список списков в плоский список. "
                 "Используй вложенный comprehension с двумя `for`.",
-                "def flatten(matrix):\n"
-                "    pass\n",
+                "def flatten(matrix):\n    pass\n",
                 [
                     {
                         "kind": "call",
@@ -784,8 +748,7 @@ LESSONS: list[dict[str, Any]] = [
                     },
                     {"kind": "call", "call": "flatten([])", "expected": []},
                 ],
-                "def flatten(matrix):\n"
-                "    return [item for row in matrix for item in row]\n",
+                "def flatten(matrix):\n    return [item for row in matrix for item in row]\n",
                 "Два `for` прошли по строкам и по их элементам, собрав всё в один список.",
                 "Сначала `for row in matrix`, затем `for item in row` внутри тех же скобок.",
             ),
