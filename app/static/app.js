@@ -1,5 +1,6 @@
 const view = document.querySelector('#view');
 let dashboard = null;
+let lessonState = null;
 
 const esc = (value = '') => String(value)
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
@@ -93,7 +94,8 @@ function renderModule(module) {
   </section>`;
 }
 
-function questionTemplate(question, number) {
+function questionTemplate(question, number, options = {}) {
+  const lessonMode = Boolean(options.lessonId);
   const head = `<div class="question-number">Задание ${number}</div><div class="question-prompt">${rich(question.prompt)}</div>`;
   let field = '';
   if (question.kind === 'choice') {
@@ -101,12 +103,13 @@ function questionTemplate(question, number) {
   } else if (question.kind === 'input') {
     field = `<input class="answer-input" data-answer-q="${question.id}" placeholder="${esc(question.placeholder || 'Введите ответ')}" autocomplete="off" />`;
   } else {
+    const checkCode = lessonMode ? '' : `<button class="button blue" type="button" data-check-code="${question.id}">▷ Проверить код</button>`;
     field = `<textarea class="code-editor" data-answer-q="${question.id}" spellcheck="false">${esc(question.starter)}</textarea>
-      <div class="code-actions"><button class="button blue" type="button" data-check-code="${question.id}">▷ Проверить код</button><button class="button ghost" type="button" data-run-code="${question.id}">▶ Запустить</button></div>
+      <div class="code-actions">${checkCode}<button class="button ghost" type="button" data-run-code="${question.id}">▶ Запустить</button></div>
       <section class="code-output" aria-live="polite"><b>Вывод</b><pre id="output-${question.id}">—</pre></section>
       <details class="hint"><summary>Нужна подсказка?</summary><p>${esc(question.hint)}</p></details>`;
   }
-  return `<article class="question-card card" data-question="${question.id}">${head}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
+  return `<article class="question-card card${lessonMode ? ' step-question-card' : ''}" data-question="${question.id}">${head}${field}<div class="inline-result" id="result-${question.id}"></div></article>`;
 }
 
 function getAnswers(scope, questions) {
@@ -155,16 +158,20 @@ function bindQuestionControls(scope) {
   });
 }
 
-function showCodeOutput(questionId, result) {
-  const node = document.querySelector(`#output-${questionId}`);
-  if (!node) return;
+function formatRunOutput(result) {
   const output = [
     result.stdout,
     result.stderr,
     result.error,
     result.timed_out && 'Превышено время выполнения.',
   ].filter(Boolean);
-  node.textContent = output.join('\n') || 'Нет вывода.';
+  return output.join('\n') || 'Нет вывода.';
+}
+
+function showCodeOutput(questionId, result) {
+  const node = document.querySelector(`#output-${questionId}`);
+  if (!node) return;
+  node.textContent = formatRunOutput(result);
 }
 
 function showInline(questionId, correct, message, checks = [], errorHint = null) {
@@ -178,6 +185,26 @@ function showInline(questionId, correct, message, checks = [], errorHint = null)
   node.innerHTML = `${hint}${details}`;
 }
 
+function showVerdict(questionId, result) {
+  const node = document.querySelector(`#result-${questionId}`);
+  if (!node) return;
+  if (result.correct) {
+    node.className = 'inline-result visible ok';
+    node.innerHTML = `<p class="verdict-title">✓ Верно</p><p>${esc(result.explanation || result.message || '')}</p>`;
+    return;
+  }
+  const message = result.message || '';
+  const explanation = result.explanation && result.explanation !== message ? `<p>${esc(result.explanation)}</p>` : '';
+  const hint = result.error_hint
+    ? `<div class="error-hint"><strong>${esc(result.error_hint.title)}</strong><span>${esc(result.error_hint.hint)}</span></div><small class="raw-error">${esc(result.error_hint.original)}</small>`
+    : '';
+  const checks = (result.checks || []).length
+    ? `<ul class="check-list">${result.checks.map((item) => `<li>${item.passed ? '✓' : '✗'} Ожидалось ${esc(item.expected)}, получено ${esc(item.actual)}</li>`).join('')}</ul>`
+    : '';
+  node.className = 'inline-result visible no';
+  node.innerHTML = `<p class="verdict-title">↺ Пока неверно</p>${message ? `<p>${esc(message)}</p>` : ''}${explanation}${hint}${checks}`;
+}
+
 function submissionResult(result, retryText = 'Попробовать ещё раз') {
   const items = result.results.map((item) => `<div class="result-item ${item.correct ? 'ok' : 'no'}"><b>${item.correct ? '✓ Верно' : '↺ Повтори'}</b> ${esc(item.explanation || item.message || '')}</div>`).join('');
   const action = result.passed
@@ -186,32 +213,267 @@ function submissionResult(result, retryText = 'Попробовать ещё р�
   return `<section class="result-panel ${result.passed ? '' : 'fail'}" id="submission-result"><h2>${result.passed ? 'Отличная работа! 🎉' : 'Ещё один подход — и получится'}</h2><p>${esc(result.message)}${result.xp_gained ? ` +${result.xp_gained} XP.` : ''}</p><div class="result-list">${items}</div><div class="code-actions">${action}</div></section>`;
 }
 
+function buildLessonSteps(lesson) {
+  const steps = [];
+  const total = Math.max(lesson.theory.length, lesson.questions.length);
+  for (let index = 0; index < total; index += 1) {
+    if (lesson.theory[index]) steps.push({ kind: 'card', card: lesson.theory[index], cardIndex: index });
+    if (lesson.questions[index]) steps.push({ kind: 'question', question: lesson.questions[index], questionIndex: index });
+  }
+  return steps;
+}
+
 async function renderLesson(id) {
   loading();
   const lesson = await api(`/api/lessons/${id}`);
-  view.innerHTML = `<section>
-    <a class="back-link" href="#/">← К маршруту</a>
-    <div class="lesson-head"><div><p class="eyebrow">Урок ${lesson.order} · ${lesson.duration} минут</p><h1>${esc(lesson.title)}</h1><p class="lead">${esc(lesson.subtitle)}</p><p class="lesson-meta"><span>⚡ ${lesson.xp} XP</span><span>🧩 3 задания</span></p></div></div>
-    <section>${lesson.theory.map((card) => `<article class="theory-card card"><h2>${esc(card.title)}</h2><p>${esc(card.text)}</p><pre class="code-example"><code>${esc(card.example)}</code></pre>${card.tip ? `<div class="tip">${esc(card.tip)}</div>` : ''}</article>`).join('')}</section>
-    <h2 class="practice-title">Проверь себя</h2><p class="lead">Нужно минимум 2 правильных ответа, чтобы открыть следующий урок.</p>
-    <form id="lesson-form">${lesson.questions.map(questionTemplate).join('')}<div class="submit-row"><button class="button" type="submit">Проверить урок <span>→</span></button><span class="submit-note">Проверяй код отдельно, прежде чем сдавать.</span></div></form>
-  </section>`;
-  const form = document.querySelector('#lesson-form');
-  bindQuestionControls(form);
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const button = form.querySelector('[type="submit"]');
-    button.disabled = true; button.textContent = 'Проверяем…';
-    try {
-      const result = await api(`/api/lessons/${id}/submit`, { method: 'POST', body: JSON.stringify({ answers: getAnswers(form, lesson.questions) }) });
-      document.querySelector('#submission-result')?.remove();
-      form.insertAdjacentHTML('afterend', submissionResult(result));
-      result.results.forEach((item) => showInline(item.question_id, item.correct, item.message, item.checks, item.error_hint));
-      await refreshDashboard();
-      if (result.passed) toast(`+${result.xp_gained} XP — урок пройден!`);
-    } catch (error) { toast(error.message); }
-    button.disabled = false; button.innerHTML = 'Проверить урок <span>→</span>';
+  startLesson(lesson);
+}
+
+function startLesson(lesson) {
+  lessonState = {
+    lesson,
+    steps: buildLessonSteps(lesson),
+    index: 0,
+    answers: {},
+    verdicts: {},
+    submitting: false,
+    summary: null,
+  };
+  lesson.questions.forEach((question) => {
+    lessonState.answers[question.id] = question.kind === 'code' ? (question.starter || '') : '';
   });
+  renderStep();
+}
+
+function cardStepTemplate(step) {
+  const state = lessonState;
+  const card = step.card;
+  const canRun = Boolean(card.example) && card.run !== false;
+  const back = state.index > 0 ? '<button class="button ghost" type="button" data-step-back>← Назад</button>' : '';
+  const runPanel = canRun
+    ? `<div class="code-actions"><button class="button blue" type="button" data-run-example="${step.cardIndex}">▶ Запустить пример</button></div>
+      <section class="code-output example-output" aria-live="polite" id="example-output-${step.cardIndex}"><b>Вывод</b><pre>—</pre></section>`
+    : '';
+  return `<article class="theory-card card step-card">
+    <p class="step-kicker">Теория</p>
+    <h2>${rich(card.title)}</h2>
+    <p>${rich(card.text)}</p>
+    <pre class="code-example"><code>${esc(card.example)}</code></pre>
+    ${runPanel}
+    ${card.tip ? `<div class="tip">${rich(card.tip)}</div>` : ''}
+  </article>
+  <div class="step-nav">${back}<div class="step-actions"><button class="button" type="button" data-step-next>Дальше</button></div></div>`;
+}
+
+function questionStepTemplate(step) {
+  const state = lessonState;
+  const question = step.question;
+  const verdict = state.verdicts[question.id];
+  const correct = Boolean(verdict && verdict.correct);
+  const back = state.index > 0 ? '<button class="button ghost" type="button" data-step-back>← Назад</button>' : '';
+  return `<section class="step step-question">
+    ${questionTemplate(question, step.questionIndex + 1, { lessonId: state.lesson.id })}
+    <div class="step-nav">${back}<div class="step-actions">
+      <button class="button step-check" type="button" data-lesson-check="${question.id}"${correct ? ' hidden' : ''}>Проверить</button>
+      <button class="button step-next" type="button" data-step-next${correct ? '' : ' hidden'}>Дальше</button>
+    </div></div>
+  </section>`;
+}
+
+function renderStep() {
+  const state = lessonState;
+  if (!state) return;
+  const step = state.steps[state.index];
+  const total = state.steps.length;
+  const progress = state.steps.map((item, index) => {
+    const stateClass = index < state.index ? 'done' : index === state.index ? 'current' : '';
+    return `<span class="progress-seg ${stateClass}"></span>`;
+  }).join('');
+  const body = step.kind === 'card' ? cardStepTemplate(step) : questionStepTemplate(step);
+  view.innerHTML = `<section class="lesson-wrap">
+    <a class="back-link" href="#/">← К маршруту</a>
+    <div class="lesson-head"><div><p class="eyebrow">Урок ${state.lesson.order} · ${state.lesson.duration} минут</p><h1>${esc(state.lesson.title)}</h1><p class="lead">${esc(state.lesson.subtitle)}</p><p class="lesson-meta"><span>⚡ ${state.lesson.xp} XP</span><span>🧩 ${state.lesson.questions.length} задания</span></p></div></div>
+    <div class="lesson-progress-block">
+      <div class="lesson-progress" role="progressbar" aria-label="Прогресс урока" aria-valuemin="1" aria-valuemax="${total}" aria-valuenow="${state.index + 1}">${progress}</div>
+      <p class="step-caption">Шаг ${state.index + 1} из ${total}</p>
+    </div>
+    ${body}
+  </section>`;
+  bindStep(step);
+}
+
+function syncAnswer(questionId, value) {
+  const state = lessonState;
+  if (!state) return;
+  if (state.answers[questionId] === value) return;
+  state.answers[questionId] = value;
+  clearVerdict(questionId);
+}
+
+function clearVerdict(questionId) {
+  const state = lessonState;
+  if (!state || !state.verdicts[questionId]) return;
+  delete state.verdicts[questionId];
+  const result = document.querySelector(`#result-${questionId}`);
+  if (result) {
+    result.className = 'inline-result';
+    result.innerHTML = '';
+  }
+  const check = document.querySelector('[data-lesson-check]');
+  if (check) check.hidden = false;
+  const next = document.querySelector('[data-step-next]');
+  if (next) next.hidden = true;
+}
+
+function captureCurrentAnswer() {
+  const state = lessonState;
+  if (!state) return;
+  const step = state.steps[state.index];
+  if (!step || step.kind !== 'question') return;
+  const field = document.querySelector(`[data-answer-q="${step.question.id}"]`);
+  if (field) state.answers[step.question.id] = field.value;
+}
+
+function bindStep(step) {
+  const state = lessonState;
+  if (step.kind === 'card') {
+    document.querySelector('[data-step-next]')?.addEventListener('click', goNext);
+    document.querySelector('[data-step-back]')?.addEventListener('click', goBack);
+    document.querySelector('[data-run-example]')?.addEventListener('click', runExample);
+    return;
+  }
+  const scope = document.querySelector('.step-question');
+  bindQuestionControls(scope);
+  const question = step.question;
+  const field = scope.querySelector(`[data-answer-q="${question.id}"]`);
+  if (field) {
+    field.value = state.answers[question.id] ?? field.value;
+    const sync = () => syncAnswer(question.id, field.value);
+    field.addEventListener('input', sync);
+    field.addEventListener('keyup', sync);
+  }
+  scope.querySelectorAll(`[data-choice-q="${question.id}"]`).forEach((button) => {
+    if (state.answers[question.id] === button.dataset.value) button.classList.add('selected');
+    button.addEventListener('click', () => syncAnswer(question.id, button.dataset.value));
+  });
+  if (state.verdicts[question.id]) showVerdict(question.id, state.verdicts[question.id]);
+  document.querySelector('[data-lesson-check]')?.addEventListener('click', (event) => checkStep(question.id, event.currentTarget));
+  document.querySelector('[data-step-next]')?.addEventListener('click', goNext);
+  document.querySelector('[data-step-back]')?.addEventListener('click', goBack);
+}
+
+function goNext() {
+  const state = lessonState;
+  if (!state || state.submitting) return;
+  captureCurrentAnswer();
+  if (state.index < state.steps.length - 1) {
+    state.index += 1;
+    renderStep();
+    return;
+  }
+  submitLesson();
+}
+
+function goBack() {
+  const state = lessonState;
+  if (!state || state.index === 0) return;
+  captureCurrentAnswer();
+  state.index -= 1;
+  renderStep();
+}
+
+async function checkStep(questionId, button) {
+  const state = lessonState;
+  if (!state) return;
+  captureCurrentAnswer();
+  const answer = state.answers[questionId] ?? '';
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Проверяем…';
+  try {
+    const result = await api(`/api/lessons/${state.lesson.id}/check`, { method: 'POST', body: JSON.stringify({ question_id: questionId, answer }) });
+    state.verdicts[questionId] = result;
+    showVerdict(questionId, result);
+    button.hidden = Boolean(result.correct);
+    const next = document.querySelector('[data-step-next]');
+    if (next) next.hidden = !result.correct;
+  } catch (error) {
+    toast(error.message);
+  }
+  button.disabled = false;
+  button.textContent = label;
+}
+
+async function runExample(event) {
+  const state = lessonState;
+  if (!state) return;
+  const button = event.currentTarget;
+  const index = Number(button.dataset.runExample);
+  const card = state.lesson.theory[index];
+  const output = document.querySelector(`#example-output-${index} pre`);
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Запускаем…';
+  try {
+    const result = await api('/api/code/run', { method: 'POST', body: JSON.stringify({ code: card.example }) });
+    if (output) output.textContent = formatRunOutput(result);
+  } catch (error) {
+    if (output) output.textContent = error.message;
+  }
+  button.disabled = false;
+  button.textContent = label;
+}
+
+async function submitLesson() {
+  const state = lessonState;
+  if (!state || state.submitting) return;
+  state.submitting = true;
+  const answers = state.lesson.questions.map((question) => ({ question_id: question.id, answer: state.answers[question.id] ?? '' }));
+  try {
+    const result = await api(`/api/lessons/${state.lesson.id}/submit`, { method: 'POST', body: JSON.stringify({ answers }) });
+    state.summary = result;
+    try { await refreshDashboard(); } catch (error) { /* итог важнее обновления шапки */ }
+    if (result.passed) toast(`+${result.xp_gained} XP — урок пройден!`);
+    renderSummary();
+  } catch (error) {
+    state.submitting = false;
+    toast(error.message);
+  }
+}
+
+function renderSummary() {
+  const state = lessonState;
+  if (!state || !state.summary) return;
+  const result = state.summary;
+  if (result.passed) {
+    const next = dashboard?.next_lesson;
+    view.innerHTML = `<section class="lesson-summary card summary-ok">
+      <p class="step-kicker">Итог урока</p>
+      <h1>Урок пройден</h1>
+      <p class="summary-xp">+${result.xp_gained} XP</p>
+      <p class="lead">${esc(result.message)}</p>
+      <div class="step-actions summary-actions">
+        ${next ? `<a class="button" href="#/lesson/${next.id}">Следующий урок</a>` : ''}
+        <a class="button ghost" href="#/">К маршруту</a>
+      </div>
+    </section>`;
+    return;
+  }
+  const missed = result.results.filter((item) => !item.correct).map((item) => {
+    const number = state.lesson.questions.findIndex((question) => question.id === item.question_id) + 1;
+    return `<li><b>Задание ${number}</b> — ${esc(item.message || 'ответ не засчитан')}</li>`;
+  }).join('');
+  view.innerHTML = `<section class="lesson-summary card summary-fail">
+    <p class="step-kicker">Итог урока</p>
+    <h1>Пока не всё засчитано</h1>
+    <p class="lead">${esc(result.message)}</p>
+    <ul class="missed-list">${missed || '<li>Проверь ответы и попробуй ещё раз.</li>'}</ul>
+    <div class="step-actions summary-actions">
+      <button class="button" type="button" data-lesson-restart>Пройти заново</button>
+      <a class="button ghost" href="#/">К маршруту</a>
+    </div>
+  </section>`;
+  document.querySelector('[data-lesson-restart]')?.addEventListener('click', () => startLesson(state.lesson));
 }
 
 async function renderPractice() {
@@ -236,7 +498,7 @@ async function renderPractice() {
 async function renderExam(moduleId) {
   loading();
   const exam = await api(`/api/exams/${moduleId}`);
-  view.innerHTML = `<section class="exam-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="exam-hero card"><p class="eyebrow">Контрольная точка</p><h1>${esc(exam.title)}</h1><p class="lead">${esc(exam.description)} Для зачёта нужно 70% правильных ответов. Награда — 50 XP.</p></article><form id="exam-form">${exam.questions.map(questionTemplate).join('')}<div class="submit-row"><button class="button blue" type="submit">Сдать экзамен <span>🏁</span></button></div></form></section>`;
+  view.innerHTML = `<section class="exam-wrap"><a class="back-link" href="#/">← К маршруту</a><article class="exam-hero card"><p class="eyebrow">Контрольная точка</p><h1>${esc(exam.title)}</h1><p class="lead">${esc(exam.description)} Для зачёта нужно 70% правильных ответов. Награда — 50 XP.</p></article><form id="exam-form">${exam.questions.map((question, index) => questionTemplate(question, index + 1)).join('')}<div class="submit-row"><button class="button blue" type="submit">Сдать экзамен <span>🏁</span></button></div></form></section>`;
   const form = document.querySelector('#exam-form');
   bindQuestionControls(form);
   form.addEventListener('submit', async (event) => {
@@ -256,6 +518,7 @@ async function renderExam(moduleId) {
 
 async function render() {
   const current = route();
+  if (!current.startsWith('/lesson/')) lessonState = null;
   setActiveNavigation(current);
   try {
     if (current === '/') { loading(); renderDashboard(await refreshDashboard()); }
@@ -311,5 +574,18 @@ document.addEventListener('keydown', (event) => {
     editor.setSelectionRange(start + 4, end + lines * 4);
   }
 });
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.defaultPrevented) return;
+  const state = lessonState;
+  if (!state || state.summary || state.submitting) return;
+  const step = state.steps[state.index];
+  if (!step || step.kind !== 'card') return;
+  const target = event.target;
+  if (target instanceof Element && target.closest('button, a, input, textarea, select, summary')) return;
+  event.preventDefault();
+  goNext();
+});
+
 window.addEventListener('hashchange', render);
 render();
