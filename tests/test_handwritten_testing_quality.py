@@ -1,5 +1,9 @@
 import ast
 import importlib
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -260,6 +264,33 @@ def test_c3_choice_and_examples_check_understanding(lesson_id: str) -> None:
     result = run_code(code, [])
     assert result["error"] is None, (lesson_id, result["error"])
     assert result["stdout"].strip() == choice["answer"], (lesson_id, result["stdout"])
+
+
+@pytest.mark.parametrize("lesson_id", LESSON_IDS)
+def test_c3_non_runner_examples_print_real_output(lesson_id: str, tmp_path: Path) -> None:
+    """Карточки с run=False не сверяет общий тест, поэтому запускаем их отдельно."""
+    path = os.pathsep.join([str(Path(sys.executable).parent), os.environ.get("PATH", "")])
+    for card in _lesson(lesson_id)["theory"]:
+        if card.get("run") is not False:
+            continue
+        for tool in ("ruff", "git"):
+            if tool in card["example"] and shutil.which(tool, path=path) is None:
+                pytest.skip(f"нет {tool} для проверки примера")
+        result = subprocess.run(
+            [sys.executable, "-c", card["example"]],
+            cwd=tmp_path,
+            env={**os.environ, "PATH": path, "PYTHONIOENCODING": "utf-8"},
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert result.returncode == 0, (lesson_id, card["title"], result.stderr)
+        assert result.stdout.splitlines() == _expected_output(card["example"]), (
+            lesson_id,
+            card["title"],
+            result.stdout,
+        )
 
 
 @pytest.mark.parametrize("lesson_id", LESSON_IDS)

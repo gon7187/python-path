@@ -631,12 +631,19 @@ LESSONS: list[dict[str, Any]] = [
                 "`ruff check`. Запускай обе команды: одна выравнивает код, другая ищет "
                 "возможные ошибки.",
                 "import subprocess\n"
+                "import tempfile\n"
+                "from pathlib import Path\n"
                 "\n"
-                "subprocess.run(['ruff', 'format', 'app'], check=True)\n"
-                "subprocess.run(['ruff', 'check', 'app'], check=True)\n"
+                "with tempfile.TemporaryDirectory() as folder:\n"
+                "    sample = Path(folder) / 'sample.py'\n"
+                "    sample.write_text('x=1\\n', encoding='utf-8')\n"
+                "    subprocess.run(['ruff', 'format', sample], capture_output=True, check=True)\n"
+                "    print(sample.read_text(encoding='utf-8').strip())\n"
+                "    result = subprocess.run(['ruff', 'check', sample], capture_output=True)\n"
+                "    print(result.returncode)\n"
                 "# Вывод:\n"
-                "# 1 file reformatted\n"
-                "# All checks passed!",
+                "# x = 1\n"
+                "# 0",
                 "Форматтер не ищет логические ошибки, а линтер не переставляет пробелы.",
                 run=False,
             ),
@@ -647,10 +654,15 @@ LESSONS: list[dict[str, Any]] = [
                 "исправь причину, а не отключай правило. В примере обе команды "
                 "запускаются в режиме проверки и возвращают код 0, когда замечаний нет.",
                 "import subprocess\n"
+                "import tempfile\n"
+                "from pathlib import Path\n"
                 "\n"
-                "format_result = subprocess.run(['ruff', 'format', '--check', 'app'])\n"
-                "check_result = subprocess.run(['ruff', 'check', 'app'])\n"
-                "print(format_result.returncode, check_result.returncode)\n"
+                "with tempfile.TemporaryDirectory() as folder:\n"
+                "    sample = Path(folder) / 'sample.py'\n"
+                "    sample.write_text('x = 1\\n', encoding='utf-8')\n"
+                "    fmt = subprocess.run(['ruff', 'format', '--check', sample], capture_output=True)\n"
+                "    lint = subprocess.run(['ruff', 'check', sample], capture_output=True)\n"
+                "    print(fmt.returncode, lint.returncode)\n"
                 "# Вывод:\n"
                 "# 0 0",
                 "Проверяй код теми же командами, что и CI, чтобы не спорить о стиле вручную.",
@@ -664,11 +676,21 @@ LESSONS: list[dict[str, Any]] = [
                 "за вид, линтер — за подозрительные конструкции. Не путай их "
                 "результаты.",
                 "import subprocess\n"
+                "import tempfile\n"
+                "from pathlib import Path\n"
                 "\n"
-                "subprocess.run(['ruff', 'format', 'app'], check=True)\n"
-                "print('формат готов, но линтер не запускался')\n"
+                "with tempfile.TemporaryDirectory() as folder:\n"
+                "    sample = Path(folder) / 'sample.py'\n"
+                "    sample.write_text('import os\\n\\nx=1\\n', encoding='utf-8')\n"
+                "    subprocess.run(['ruff', 'format', sample], capture_output=True, check=True)\n"
+                "    print(sample.read_text(encoding='utf-8').strip())\n"
+                "    check = subprocess.run(['ruff', 'check', sample], capture_output=True)\n"
+                "    print(check.returncode)\n"
                 "# Вывод:\n"
-                "# формат готов, но линтер не запускался",
+                "# import os\n"
+                "#\n"
+                "# x = 1\n"
+                "# 1",
                 "После форматтера всегда запускай линтер и тесты.",
                 run=False,
             ),
@@ -836,16 +858,29 @@ LESSONS: list[dict[str, Any]] = [
         [
             _card(
                 "Git сохраняет историю маленькими шагами",
-                "Git записывает изменения в коммиты. Сначала `git status` показывает, "
-                "что изменено. Потом `git add` готовит нужные файлы, а `git commit` "
-                "сохраняет шаг с сообщением. Маленький коммит легче понять, проверить и "
-                "откатить. История становится рассказом о том, как развивался проект.",
+                "Git записывает изменения в коммиты: `git add` готовит файлы, `git "
+                "commit` сохраняет шаг, а `git log` показывает историю. Маленький "
+                "коммит легче понять, проверить и откатить. История становится рассказом "
+                "о том, как развивался проект.",
                 "import subprocess\n"
+                "import tempfile\n"
+                "from pathlib import Path\n"
                 "\n"
-                "result = subprocess.run(['git', 'status', '--short'], capture_output=True, text=True)\n"
-                "print(result.stdout.strip())\n"
+                "with tempfile.TemporaryDirectory() as folder:\n"
+                "    def git(*args):\n"
+                "        return subprocess.run(\n"
+                "            ['git', *args], cwd=folder, capture_output=True, text=True, check=True\n"
+                "        )\n"
+                "\n"
+                "    git('init', '--quiet')\n"
+                "    git('config', 'user.email', 'test@example.com')\n"
+                "    git('config', 'user.name', 'Тест')\n"
+                "    Path(folder, 'hello.py').write_text('print(1)\\n', encoding='utf-8')\n"
+                "    git('add', 'hello.py')\n"
+                "    git('commit', '--quiet', '-m', 'Добавить приветствие')\n"
+                "    print(git('log', '--format=%s').stdout.strip())\n"
                 "# Вывод:\n"
-                "# M app/service.py",
+                "# Добавить приветствие",
                 "Один коммит — одна законченная мысль.",
                 run=False,
             ),
@@ -857,14 +892,28 @@ LESSONS: list[dict[str, Any]] = [
                 "не должна быть пустой, длиннее 50 символов или заканчиваться точкой. "
                 "Проверить сообщение можно до коммита.",
                 "import subprocess\n"
+                "import tempfile\n"
+                "from pathlib import Path\n"
                 "\n"
-                "subprocess.run(['git', 'add', 'app/service.py'], check=True)\n"
-                "result = subprocess.run(\n"
-                "    ['git', 'commit', '-m', 'Добавить проверку'], capture_output=True, text=True\n"
-                ")\n"
-                "print(result.stdout.splitlines()[0])\n"
+                "with tempfile.TemporaryDirectory() as folder:\n"
+                "    def git(*args):\n"
+                "        return subprocess.run(\n"
+                "            ['git', *args], cwd=folder, capture_output=True, text=True, check=True\n"
+                "        )\n"
+                "\n"
+                "    git('init', '--quiet')\n"
+                "    git('config', 'user.email', 'test@example.com')\n"
+                "    git('config', 'user.name', 'Тест')\n"
+                "    Path(folder, 'service.py').write_text('limit = 10\\n', encoding='utf-8')\n"
+                "    print(git('status', '--short').stdout.strip())\n"
+                "    git('add', 'service.py')\n"
+                "    print(git('status', '--short').stdout.strip())\n"
+                "    git('commit', '--quiet', '-m', 'Добавить лимит')\n"
+                "    print(git('log', '--format=%s').stdout.strip())\n"
                 "# Вывод:\n"
-                "# [main 1a2b3c4] Добавить проверку",
+                "# ?? service.py\n"
+                "# A  service.py\n"
+                "# Добавить лимит",
                 "Сообщение коммита отвечает на вопрос «что сделать?», а не «что я делал».",
                 run=False,
             ),
@@ -872,17 +921,27 @@ LESSONS: list[dict[str, Any]] = [
                 "Типичная ошибка: расплывчатый коммит с точкой",
                 "Сообщение «Исправил баг.» не говорит, что именно исправлено, и "
                 "заканчивается точкой. В истории такой коммит трудно найти. Заметить "
-                "ошибку можно через `git log --oneline`: если по строке нельзя понять "
-                "изменение, сообщение плохое. Пиши конкретное действие без точки в "
+                "ошибку можно через `git log --format=%s`: если по строке нельзя "
+                "понять изменение, сообщение плохое. Пиши конкретное действие без точки в "
                 "конце, например «Исправить расчёт скидки».",
                 "import subprocess\n"
+                "import tempfile\n"
                 "\n"
-                "result = subprocess.run(\n"
-                "    ['git', 'commit', '-m', 'Исправил баг.'], capture_output=True, text=True\n"
-                ")\n"
-                "print(result.stdout.splitlines()[0])\n"
+                "with tempfile.TemporaryDirectory() as folder:\n"
+                "    def git(*args):\n"
+                "        return subprocess.run(\n"
+                "            ['git', *args], cwd=folder, capture_output=True, text=True, check=True\n"
+                "        )\n"
+                "\n"
+                "    git('init', '--quiet')\n"
+                "    git('config', 'user.email', 'test@example.com')\n"
+                "    git('config', 'user.name', 'Тест')\n"
+                "    git('commit', '--quiet', '--allow-empty', '-m', 'Исправил баг.')\n"
+                "    git('commit', '--quiet', '--allow-empty', '-m', 'Исправить расчёт скидки')\n"
+                "    print(git('log', '--format=%s').stdout.strip())\n"
                 "# Вывод:\n"
-                "# [main 1a2b3c4] Исправил баг.",
+                "# Исправить расчёт скидки\n"
+                "# Исправил баг.",
                 "Проверь сообщение по трём правилам: не пусто, до 50 символов, без точки.",
                 run=False,
             ),
