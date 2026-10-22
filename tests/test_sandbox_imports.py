@@ -93,3 +93,57 @@ def test_learner_main_guard_not_taken() -> None:
     result = run_code("if __name__ == '__main__':\n    print('main')\nprint(__name__)\n", [])
     assert result["error"] is None
     assert result["stdout"].strip() == "__learner__"
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # Formatter.get_field разбирает цепочку атрибутов из строки и обходит AST.
+        (
+            "import string, json\n"
+            "loader = string.Formatter().get_field("
+            "'0.__init__.__globals__[__builtins__][__import__]',"
+            " [json.JSONDecoder], {})[0]\n"
+            "print(loader('os').getcwd())\n"
+        ),
+        "import string\nprint(string.Formatter)\n",
+        "from string import Formatter\n",
+        "print('{0.__init__.__globals__}'.format(object))\n",
+        "print('{0.__init__.__globals__}'.format_map([object]))\n",
+        "print('{0.__class__}'.format(1))\n",
+        "template = '{0.__class__}'\nprint(template.format(1))\n",
+        # get_type_hints вычисляет строковые аннотации через eval.
+        (
+            "import typing\n"
+            "def f(x: '().__class__.__base__.__subclasses__()'):\n"
+            "    pass\n"
+            "print(typing.get_type_hints(f))\n"
+        ),
+        "import typing\nprint(typing.ForwardRef)\n",
+        "from typing import get_type_hints\n",
+        "import functools\nprint(functools.singledispatch)\n",
+    ],
+)
+def test_string_and_annotation_based_attribute_bypass_rejected(code: str) -> None:
+    result = run_code("print('до запуска')\n" + code, [])
+    assert result["correct"] is False
+    assert result["error"] is not None
+    assert result["stdout"] == ""
+
+
+def test_safe_literal_format_still_works() -> None:
+    code = (
+        "print('{} {}'.format(1, 2))\n"
+        "print('{name}!'.format(name='ok'))\n"
+        "print('{0:{1}}'.format(5, '>4'))\n"
+    )
+    result = run_code(code, [])
+    assert result["error"] is None
+    assert result["stdout"].splitlines() == ["1 2", "ok!", "   5"]
+
+
+def test_typing_public_types_are_still_available() -> None:
+    result = run_code("import typing\nprint(typing.List, typing.Optional)\n", [])
+    assert result["error"] is None
+    assert "typing.List" in result["stdout"]
+
