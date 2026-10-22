@@ -48,6 +48,11 @@ class Submission(BaseModel):
     answers: list[Answer]
 
 
+class QuestionCheck(BaseModel):
+    question_id: str
+    answer: str = ""
+
+
 class CodeCheck(BaseModel):
     question_id: str
     answer: str
@@ -226,6 +231,29 @@ def submit_lesson(lesson_id: str, submission: Submission) -> dict:
             else "Нужно минимум 2 верных ответа из 3. Попробуй ещё раз — это нормально."
         ),
     }
+
+
+@app.post("/api/lessons/{lesson_id}/check")
+def check_lesson_answer(lesson_id: str, payload: QuestionCheck) -> dict:
+    lesson = require_lesson(lesson_id)
+    question = next(
+        (item for item in lesson["questions"] if item["id"] == payload.question_id), None
+    )
+    if question is None:
+        raise HTTPException(status_code=404, detail="Задание не найдено в этом уроке")
+    result = evaluate(question, payload.answer)
+    record_attempt(question["id"], result["correct"])
+    response = {
+        "question_id": question["id"],
+        "correct": result["correct"],
+        "message": result["message"],
+        "explanation": result.get("explanation") or question.get("explanation", ""),
+    }
+    if "checks" in result:
+        response["checks"] = result["checks"]
+    if error_text := result.get("error"):
+        response["error_hint"] = translate_error(error_text)
+    return response
 
 
 @app.get("/api/practice")
