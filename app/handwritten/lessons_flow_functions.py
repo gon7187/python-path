@@ -505,12 +505,7 @@ LESSONS: list[dict[str, Any]] = [
                 "работает функция. При вызове на их место подставляются аргументы. Одна "
                 "и та же функция с разными аргументами даёт разный результат, поэтому "
                 "код не нужно повторять.",
-                "def double(number):\n"
-                "    return number * 2\n"
-                "\n"
-                "print(double(4))\n"
-                "# Вывод:\n"
-                "# 8",
+                "def double(number):\n    return number * 2\n\nprint(double(4))\n# Вывод:\n# 8",
             ),
             _card(
                 "Несколько параметров по порядку",
@@ -650,8 +645,7 @@ LESSONS: list[dict[str, Any]] = [
             ),
             _code(
                 "functions-pro-defaults",
-                "Напиши `greet(name, greeting='Привет')`: верни строку "
-                "`'<greeting>, <name>!'`.",
+                "Напиши `greet(name, greeting='Привет')`: верни строку `'<greeting>, <name>!'`.",
                 "def greet(name, greeting='Привет'):\n    # собери приветствие\n    pass\n",
                 [
                     {
@@ -666,8 +660,7 @@ LESSONS: list[dict[str, Any]] = [
                     },
                     {"kind": "call", "call": "greet('Ли', '')", "expected": ", Ли!"},
                 ],
-                "def greet(name, greeting='Привет'):\n"
-                "    return greeting + ', ' + name + '!'\n",
+                "def greet(name, greeting='Привет'):\n    return greeting + ', ' + name + '!'\n",
                 "Верно: без второго аргумента подставляется «Привет», с аргументом — переданное слово.",
                 "Собери строку из greeting, запятой, имени и восклицательного знака.",
             ),
@@ -844,9 +837,7 @@ LESSONS: list[dict[str, Any]] = [
                 "functions-pro-varargs",
                 "Напиши `summary(*scores, **meta)`: верни словарь с `count` (сколько "
                 "оценок), `best` (максимум или `None`) и всеми парами из `meta`.",
-                "def summary(*scores, **meta):\n"
-                "    # собери count, best и добавь meta\n"
-                "    pass\n",
+                "def summary(*scores, **meta):\n    # собери count, best и добавь meta\n    pass\n",
                 [
                     {
                         "kind": "call",
