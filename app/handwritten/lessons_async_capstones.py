@@ -253,6 +253,7 @@ LESSONS: list[dict[str, Any]] = [
                 "import asyncio\n"
                 "\n"
                 "async def job():\n"
+                "    await asyncio.sleep(1)\n"
                 "    print('задача выполнена')\n"
                 "\n"
                 "async def main():\n"
