@@ -165,7 +165,7 @@ def require_lesson(lesson_id: str) -> dict:
     return lesson
 
 
-RETRY_HINT = "Пока неверно. Перечитай условие и попробуй ещё раз."
+RETRY_HINT = "Перечитай условие и попробуй ещё раз."
 
 
 def public_answer_result(question: dict, result: dict) -> dict:
