@@ -144,15 +144,14 @@ LESSONS: list[dict[str, Any]] = [
                 "testing-unit-tests",
                 "Что выведет код?\n\n"
                 "def square(n):\n"
-                "    return n * n\n"
+                "    return n * 2\n"
                 "\n"
-                "assert square(3) == 9\n"
-                "assert square(-2) == 4\n"
-                "print(square(4))",
-                ["16", "25", "36", "49"],
-                "16",
-                "Функция возвращает квадрат числа, поэтому `square(4)` даёт 16. "
-                "Проверки до печати проходят, ошибки нет.",
+                "ok = square(3) == 9\n"
+                "print('тест прошёл' if ok else 'тест упал')",
+                ["тест упал", "тест прошёл", "ошибка 6", "ошибка 9"],
+                "тест упал",
+                "В функции ошибка: она удваивает, а не возводит в квадрат. `square(3)` даёт 6, "
+                "ожидание 9 не совпало — так тест ловит баг. `assert` здесь бы упал.",
             ),
             _term(
                 "testing-unit-tests",
@@ -569,14 +568,13 @@ LESSONS: list[dict[str, Any]] = [
             _choice(
                 "quality-pep8",
                 "Что выведет код?\n\n"
-                "def average_speed(distance_km, hours):\n"
-                "    return round(distance_km / hours, 1)\n"
-                "\n"
-                "print(average_speed(120, 1.5))",
-                ["80.0", "40.0", "120.0", "72.0"],
-                "80.0",
-                "120 километров за 1,5 часа дают 80 километров в час. `round` с одним "
-                "знаком после запятой оставляет `80.0`.",
+                "name = 'averageSpeed'\n"
+                "snake = ''.join('_' + c.lower() if c.isupper() else c for c in name)\n"
+                "print(snake)",
+                ["average_speed", "averagespeed", "average__speed", "_average_speed"],
+                "average_speed",
+                "Код переводит имя в snake_case: перед каждой заглавной буквой ставит `_` и "
+                "делает её строчной. Так PEP 8 советует называть функции и переменные.",
             ),
             _term(
                 "quality-pep8",
@@ -950,12 +948,13 @@ LESSONS: list[dict[str, Any]] = [
             _choice(
                 "quality-git",
                 "Что выведет код?\n\n"
-                "message = 'Добавить поиск'\n"
-                "print(len(message.splitlines()[0]))",
-                ["14", "13", "15", "50"],
-                "14",
-                "В строке «Добавить поиск» 14 символов: восемь букв, пробел и пять букв. "
-                "Первая строка здесь совпадает со всей строкой.",
+                "message = 'Добавить поиск\\n\\nИщет задачи по названию.'\n"
+                "first = message.splitlines()[0]\n"
+                "print(first.endswith('.'), len(first) <= 50)",
+                ["False True", "True True", "True False", "False False"],
+                "False True",
+                "Заголовок коммита — только первая строка: «Добавить поиск». Точки в конце нет, "
+                "длина 14 — правило «до 50 символов» выполнено. Точка в теле не считается.",
             ),
             _term(
                 "quality-git",
