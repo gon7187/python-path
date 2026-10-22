@@ -498,7 +498,7 @@ function renderSummary() {
   view.innerHTML = `<section class="lesson-summary card summary-fail">
     <p class="step-kicker">Итог урока</p>
     <h1>Пока не всё засчитано</h1>
-    <p class="lead">${esc(result.message)}</p>
+    <p class="lead">Урок засчитывается, когда решено задание с кодом и ещё хотя бы одно.</p>
     <ul class="missed-list">${missed || '<li>Проверь ответы и попробуй ещё раз.</li>'}</ul>
     <div class="step-actions summary-actions">
       <button class="button" type="button" data-lesson-restart>Пройти заново</button>
