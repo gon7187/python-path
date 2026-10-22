@@ -9,7 +9,11 @@ import subprocess
 import sys
 from typing import Any
 
-FORBIDDEN_NODES = (ast.Import, ast.ImportFrom, ast.Global, ast.Nonlocal, ast.AsyncFunctionDef)
+IMPORT_REJECTED = "Этот учебный редактор не поддерживает импорт и системные операции."
+SYSTEM_NAMES_REJECTED = "В учебном редакторе нельзя использовать системные функции."
+ATTRIBUTE_REJECTED = "Служебные атрибуты недоступны в учебном редакторе."
+
+FORBIDDEN_NODES = (ast.Global, ast.Nonlocal, ast.AsyncFunctionDef)
 FORBIDDEN_NAMES = {
     "__import__",
     "breakpoint",
@@ -29,21 +33,80 @@ FORBIDDEN_NAMES = {
     "delattr",
 }
 
+ALLOWED_MODULES = frozenset(
+    {
+        "json",
+        "re",
+        "math",
+        "statistics",
+        "itertools",
+        "functools",
+        "collections",
+        "string",
+        "datetime",
+        "decimal",
+        "fractions",
+        "dataclasses",
+        "enum",
+        "heapq",
+        "bisect",
+        "random",
+        "typing",
+    }
+)
+
+ALLOWED_DUNDER_ATTRIBUTES = frozenset(
+    {
+        "__init__",
+        "__str__",
+        "__repr__",
+        "__eq__",
+        "__lt__",
+        "__len__",
+        "__iter__",
+        "__next__",
+        "__enter__",
+        "__exit__",
+        "__name__",
+    }
+)
+
 
 class SafetyVisitor(ast.NodeVisitor):
     def visit(self, node: ast.AST) -> Any:
         if isinstance(node, FORBIDDEN_NODES):
-            raise ValueError("Этот учебный редактор не поддерживает импорт и системные операции.")
+            raise ValueError(IMPORT_REJECTED)
         return super().visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:
-        if node.id in FORBIDDEN_NAMES or node.id.startswith("__"):
-            raise ValueError("В учебном редакторе нельзя использовать системные функции.")
+        if node.id in FORBIDDEN_NAMES:
+            raise ValueError(SYSTEM_NAMES_REJECTED)
+        if node.id.startswith("__") and node.id != "__name__":
+            raise ValueError(SYSTEM_NAMES_REJECTED)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        if node.attr.startswith("_"):
-            raise ValueError("Служебные атрибуты недоступны в учебном редакторе.")
+        if node.attr.startswith("_") and node.attr not in ALLOWED_DUNDER_ATTRIBUTES:
+            raise ValueError(ATTRIBUTE_REJECTED)
         self.generic_visit(node)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            if alias.name not in ALLOWED_MODULES:
+                raise ValueError(IMPORT_REJECTED)
+            self._check_import_alias(alias)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.level != 0 or node.module not in ALLOWED_MODULES:
+            raise ValueError(IMPORT_REJECTED)
+        for alias in node.names:
+            if alias.name == "*" or alias.name.startswith("_"):
+                raise ValueError(IMPORT_REJECTED)
+            self._check_import_alias(alias)
+
+    @staticmethod
+    def _check_import_alias(alias: ast.alias) -> None:
+        if alias.asname and (alias.asname in FORBIDDEN_NAMES or alias.asname.startswith("__")):
+            raise ValueError(SYSTEM_NAMES_REJECTED)
 
 
 RUNNER = r"""
@@ -52,13 +115,51 @@ import builtins
 import contextlib
 import io
 import json
+import types
+
+ALLOWED_MODULES = ALLOWED_MODULES_DATA
+
+
+def _build_facade(module):
+    public = {}
+    for name, value in vars(module).items():
+        if name.startswith('_'):
+            continue
+        if isinstance(value, types.ModuleType):
+            continue
+        public[name] = value
+    return types.SimpleNamespace(**public)
+
+
+_facades = {}
+_real_import = builtins.__import__
+
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if level != 0 or name not in ALLOWED_MODULES:
+        raise ImportError('Этот учебный редактор не поддерживает импорт и системные операции.')
+    if name not in _facades:
+        _facades[name] = _build_facade(_real_import(name))
+    return _facades[name]
+
 
 SAFE_BUILTINS = {
-    '__build_class__': builtins.__build_class__, 'abs': abs, 'all': all, 'any': any,
+    '__build_class__': builtins.__build_class__, '__import__': _safe_import,
+    'abs': abs, 'all': all, 'any': any,
     'bool': bool, 'dict': dict, 'enumerate': enumerate, 'float': float, 'int': int,
     'len': len, 'list': list, 'max': max, 'min': min, 'print': print, 'range': range,
     'round': round, 'set': set, 'sorted': sorted, 'str': str, 'sum': sum, 'tuple': tuple,
     'zip': zip,
+    'Exception': Exception, 'ValueError': ValueError, 'TypeError': TypeError,
+    'KeyError': KeyError, 'IndexError': IndexError, 'ZeroDivisionError': ZeroDivisionError,
+    'AttributeError': AttributeError, 'StopIteration': StopIteration,
+    'RuntimeError': RuntimeError, 'NotImplementedError': NotImplementedError,
+    'ArithmeticError': ArithmeticError, 'LookupError': LookupError,
+    'isinstance': isinstance, 'issubclass': issubclass, 'reversed': reversed, 'map': map,
+    'filter': filter, 'iter': iter, 'next': next, 'repr': repr, 'divmod': divmod,
+    'pow': pow, 'chr': chr, 'ord': ord, 'frozenset': frozenset, 'super': super,
+    'object': object, 'property': property, 'staticmethod': staticmethod,
+    'classmethod': classmethod, 'hasattr': hasattr, 'callable': callable,
 }
 source = base64.b64decode(CODE).decode('utf-8')
 tests = json.loads(base64.b64decode(TESTS).decode('utf-8'))
@@ -177,7 +278,11 @@ def run_code(source: str, tests: list[dict]) -> dict:
     encoded_tests = base64.b64encode(
         json.dumps(runtime_tests, ensure_ascii=False).encode("utf-8")
     ).decode("ascii")
-    program = RUNNER.replace("CODE", repr(encoded_code)).replace("TESTS", repr(encoded_tests))
+    program = (
+        RUNNER.replace("CODE", repr(encoded_code))
+        .replace("TESTS", repr(encoded_tests))
+        .replace("ALLOWED_MODULES_DATA", repr(tuple(sorted(ALLOWED_MODULES))))
+    )
     try:
         result = subprocess.run(
             [sys.executable, "-I", "-c", program],
