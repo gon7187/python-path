@@ -98,7 +98,9 @@ def _param_names(function: ast.FunctionDef) -> list[str]:
     return [arg.arg for arg in function.args.args]
 
 
-def _nodes(tree: ast.AST, node_type: type) -> list[Any]:
+def _nodes(tree: ast.AST | None, node_type: type) -> list[Any]:
+    if tree is None:
+        return []
     return [node for node in ast.walk(tree) if isinstance(node, node_type)]
 
 
