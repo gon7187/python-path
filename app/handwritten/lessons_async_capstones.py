@@ -498,11 +498,14 @@ LESSONS: list[dict[str, Any]] = [
             _choice(
                 "async-async-design",
                 "Что выведет этот код?\n"
-                "durations = [1, 2, 3]\n"
-                "print(max(durations) + sum(durations))",
-                ["9", "6", "7", "8"],
-                "9",
-                "Максимум равен 3, сумма — 6. Вместе получается 9.",
+                "durations = [1, 2, 3]  # секунды на запрос\n"
+                "one_by_one = sum(durations)\n"
+                "together = max(durations)  # как при asyncio.gather\n"
+                "print(one_by_one, together)",
+                ["6 3", "3 6", "6 6", "3 3"],
+                "6 3",
+                "По очереди запросы ждут друг друга — время складывается. "
+                "Вместе ждут одновременно — итог равен самому долгому.",
             ),
             _term(
                 "async-async-design",
