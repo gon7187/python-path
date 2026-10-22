@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_JS = REPO_ROOT / "app" / "static" / "app.js"
@@ -41,7 +42,7 @@ def _node() -> str | None:
     return shutil.which("node")
 
 
-def _run_vm(mode: str, payload: object) -> object | None:
+def _run_vm(mode: str, payload: object) -> Any:
     node = _node()
     if node is None:
         return None
