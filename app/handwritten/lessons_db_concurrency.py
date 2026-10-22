@@ -140,18 +140,20 @@ LESSONS: list[dict[str, Any]] = [
         [
             _choice(
                 "databases-relational",
-                "Найди ошибку в коде.\n\n"
-                "users = [{'id': 1, 'name': 'Аня'}]\n"
-                "orders = [{'user_id': 2, 'sum': 100}]\n"
-                "print(users[0]['name'], orders[0]['sum'])",
+                "Что выведет этот код?\n\n"
+                "users = [{'id': 1, 'name': 'Аня'}, {'id': 2, 'name': 'Боря'}]\n"
+                "order = {'user_id': 2, 'sum': 100}\n"
+                "names = {user['id']: user['name'] for user in users}\n"
+                "print(names[order['user_id']], order['sum'])",
                 [
-                    "заказ взят по позиции, а не по ключу",
-                    "в словаре users вообще нет поля name",
-                    "в orders нет поля user_id и sum",
+                    "Боря 100",
+                    "Аня 100",
+                    "Боря 2",
+                    "None 100",
                 ],
-                "заказ взят по позиции, а не по ключу",
-                "orders[0] относится к user_id=2, но код берёт первого пользователя по "
-                "позиции. Соединять нужно по совпадению id и user_id.",
+                "Боря 100",
+                "Заказ связан с пользователем по ключу: user_id=2 совпадает с id Бори. "
+                "Позиция в списке тут не важна.",
             ),
             _term(
                 "databases-relational",
